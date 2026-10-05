@@ -1,6 +1,6 @@
-# claude-mods
+# zadoli-mods
 
-Claude Code mods (function-hook plugins), as a plugin marketplace.
+Zádori Olivér's Claude Code mods (function-hook plugins), as the `zadoli-mods` plugin marketplace (repo: `zadoli/claude-mods`).
 
 | Mod | What it does |
 | --- | --- |
@@ -13,21 +13,21 @@ Needs Claude Code 2.1.287 or newer.
 
 ```bash
 claude plugin marketplace add zadoli/claude-mods
-claude plugin install prompt-cache-control@claude-mods
-claude plugin install context-band@claude-mods
+claude plugin install prompt-cache-control@zadoli-mods
+claude plugin install context-band@zadoli-mods
 ```
 
 Then `/reload-plugins` in a running session (or start a new one). The repo is private: the machine needs `gh auth login` (or git credentials) for GitHub first.
 
-Update later with `claude plugin marketplace update claude-mods`.
+Update later with `claude plugin marketplace update zadoli-mods`.
 
 ## Options
 
-In `~/.claude/settings.json` (the key is `<plugin>@claude-mods` when installed from this marketplace):
+In `~/.claude/settings.json` (the key is `<plugin>@zadoli-mods` when installed from this marketplace):
 
 ```json
 "pluginConfigs": {
-  "prompt-cache-control@claude-mods": {
+  "prompt-cache-control@zadoli-mods": {
     "options": { "ttl": "1h", "breakdown": false, "status": false, "guard": "refuse" }
   }
 }

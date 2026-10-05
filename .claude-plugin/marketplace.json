@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "claude-mods",
+  "name": "zadoli-mods",
   "description": "Zádori Olivér's Claude Code mods: a prompt-cache meter with keepwarm and a cold-cache guard, and a context row for the desktop app.",
   "owner": {
     "name": "Zádori Olivér",
