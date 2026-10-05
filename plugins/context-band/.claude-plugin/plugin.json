@@ -1,0 +1,10 @@
+{
+  "name": "context-band",
+  "version": "0.1.0",
+  "description": "A row above the prompt with the working directory, its git branch and the skill loaded since your last message.",
+  "author": {
+    "name": "Zádori Olivér",
+    "url": "https://github.com/zadoli"
+  },
+  "license": "MIT"
+}
