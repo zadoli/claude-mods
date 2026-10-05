@@ -17,6 +17,7 @@ import {
   missReason,
   remainingMs,
   resolveTtl,
+  calibRate,
   guardVerdict,
   isColdWrite,
 } from '../hooks/cache.ts'
@@ -401,4 +402,12 @@ describe('the pane', () => {
       await ui.unmount()
     })
   }
+})
+
+describe('plan window estimate (experimental)', () => {
+  test('percent per dollar once the window moved half a percent', () => {
+    expect(calibRate(10, 1, 12, 3)).toBe(1)
+    expect(calibRate(10, 1, 10.4, 3)).toBeUndefined()
+    expect(calibRate(10, 1, 11, 1)).toBeUndefined()
+  })
 })

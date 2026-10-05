@@ -37,6 +37,7 @@
  */
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 import {
+  calibRate,
   guardVerdict,
   isColdWrite,
   advise,
@@ -335,6 +336,7 @@ async function ping($: EngineInterface) {
     ? (u.cache_read_input_tokens * price[0] + u.cache_creation_input_tokens * price[1] + (u.input_tokens * price[1]) / 2 + u.output_tokens * price[2]) / 1e6
     : null
   lastPing = { read: u.cache_read_input_tokens, usd }
+  if (usd != null) spentUsd += usd
   pushSample({
     turnId: `keepwarm-${now}`,
     index: 0,
@@ -436,6 +438,41 @@ function guardText(now: number): string {
 
 let ackedAt = 0
 
+// ---- experimental: list price as a share of the 5-hour plan window. The engine
+// reports the window's percentUsed but not its size, so this session's spend at
+// list price is set against how far the window moved. Other sessions drawing on
+// the same window make it read high.
+const KEY_CALIB = 'calib.pctPerUsd'
+/** this session's spend at list price, requests and keepwarm pings */
+let spentUsd = 0
+/** where the window and the spend stood when this window was first seen */
+let anchor: { resetsAt: string; pct: number; usd: number } | undefined
+/** the last estimate: percent of the 5-hour window per list-price dollar */
+let pctPerUsd: number | undefined
+
+/** a call's list price: cache read, cache write at the TTL in force, uncached input at base (half the 1h write rate), output */
+function usdOf(u: { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }, model: string): number | null {
+  const price = priceOf(model)
+  const rate = writeRate(model)
+  if (!price || rate == null) return null
+  return (u.cache_read_input_tokens * price[0] + u.cache_creation_input_tokens * rate + (u.input_tokens * price[1]) / 2 + u.output_tokens * price[2]) / 1e6
+}
+
+/** after a turn: move the anchor on a new window, otherwise update the estimate */
+async function calibrate($: EngineInterface) {
+  const w = (await $.session.usage().catch(() => undefined))?.rateLimits?.find(x => x.kind === 'five_hour')
+  if (!w || !w.resetsAt) return
+  if (!anchor || anchor.resetsAt !== w.resetsAt || w.percentUsed < anchor.pct) {
+    anchor = { resetsAt: w.resetsAt, pct: w.percentUsed, usd: spentUsd }
+    return
+  }
+  const r = calibRate(anchor.pct, anchor.usd, w.percentUsed, spentUsd)
+  if (r !== undefined) {
+    pctPerUsd = r
+    await $.store.set(KEY_CALIB, r)
+  }
+}
+
 function pushSample(sample: Sample) {
   samples.push(sample)
   if (samples.length > KEEP) samples = samples.slice(-KEEP)
@@ -490,6 +527,10 @@ export const register: Register = (on, options) => {
 
     // a reload with status turned off leaves the previous load's entry behind
     if (!showStatus) $.ui.status(undefined)
+    spentUsd = 0
+    anchor = undefined
+    const savedRate = await $.store.get(KEY_CALIB).catch(() => undefined)
+    pctPerUsd = typeof savedRate === 'number' && savedRate > 0 ? savedRate : undefined
     // keepwarm failing to start must not take the meter down with it
     try {
       await keepwarmStart($)
@@ -759,6 +800,12 @@ export const register: Register = (on, options) => {
             <Text key="v" bold color="green">{sp(fmtUsd(warm))}</Text>) : null,
           row('$:guard', 'guard', <Text key="v" bold>{sp(guard === 'refuse' ? 'refuse once' : guard === 'warn' ? 'warn only' : 'off')}</Text>,
             <Text key="s" dimColor>{sp('on a cold cache of 50k+ tokens')}</Text>),
+          pctPerUsd !== undefined && cold != null && warm != null
+            ? row('$:plan', '5h window', <Text key="v" bold color="magenta">{sp(`≈ ${(cold * pctPerUsd).toFixed(1)}% cold · ${(warm * pctPerUsd).toFixed(1)}% warm`)}</Text>,
+                <Text key="s" dimColor>{sp(`🧪 experimental · ${pctPerUsd.toFixed(2)}% per $`)}</Text>)
+            : anchor
+              ? row('$:plan', '5h window', <Text key="v" dimColor>{sp('🧪 calibrating…')}</Text>)
+              : null,
           row('$:session', 'this session', <Text key="v" bold color={misses.length ? 'red' : undefined}>{sp(`${misses.length} cold write${misses.length === 1 ? '' : 's'} · ${fmtUsd(paid)}`)}</Text>),
         ])}
 
@@ -830,6 +877,11 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     if (e.agentId) return r
     compacted = false
+    if (e.usage) {
+      const usd = usdOf(e.usage, e.usage.model || (samples[samples.length - 1]?.model ?? ''))
+      if (usd != null) spentUsd += usd
+    }
+    await calibrate($).catch(() => undefined)
     const paid = coldWriteOf(e.turnId)
     coldWritePending = false
     if (paid) {

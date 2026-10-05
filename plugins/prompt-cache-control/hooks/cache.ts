@@ -332,3 +332,14 @@ export function guardVerdict(g: { mode: GuardMode; coldAt: number | undefined; t
 /** a request re-wrote the prefix: the guard let a cold send through, or it wrote half a 20k+ previous prompt or more (from cache-tax) */
 export const isColdWrite = (prevTokens: number, write: number, guardLetThrough: boolean) =>
   guardLetThrough || (prevTokens > 20_000 && write >= 0.5 * prevTokens)
+
+/**
+ * Experimental: percent of a plan window per list-price dollar, from how far
+ * the window moved (`pct0` to `pct`) while `usd0` to `usd` was spent. Undefined
+ * until the window moved half a percent, as it reports one decimal.
+ */
+export function calibRate(pct0: number, usd0: number, pct: number, usd: number): number | undefined {
+  const dp = pct - pct0
+  const du = usd - usd0
+  return dp >= 0.5 && du > 0 ? dp / du : undefined
+}
