@@ -655,12 +655,53 @@ export const register: Register = (on, options) => {
     return r
   })
 
+  /** the pane as plain lines, for where nothing draws it (Remote Control) */
+  function textSummary(now: number): string {
+    const { last, advice, left } = current(policy, now)
+    const kwi = keepwarmInfo(now)
+    const { tokens, cold, warm } = coldPrice()
+    const isColdNow = coldSince(now) !== undefined
+    const price = priceOf(last?.model ?? '')
+    const rate = writeRate(last?.model ?? '')
+    const breakEven = price && rate ? Math.floor(rate / price[0]) : undefined
+    const paid = misses.reduce((a, m) => a + (m.usd ?? 0), 0)
+    const counting = !!last && advice.kind !== 'uncached' && advice.kind !== 'off'
+    const row = (label: string, value: string) => `${label.padEnd(LABEL_W)}${value}`
+    const lines = [`cache: ${advice.text}`]
+    lines.push(row('lifetime', `${ttl} (${ttlSource})`))
+    if (counting) lines.push(row('expires in', left > 0 ? fmtClock(left) : '0:00'))
+    if (last) {
+      lines.push(row('model', last.model))
+      lines.push(row('prompt', `${fmtTokens(promptTokens(last))} tokens`))
+      lines.push(row('last request', `${pct1(hitRatio(last))} hit · read ${fmtTokens(last.read)} · wrote ${fmtTokens(last.write)} · new ${fmtTokens(last.fresh)}`))
+    }
+    lines.push(row('keepwarm', kwi.stopped ? `stopped: ${kwi.stopped}`
+      : kwi.on ? `${fmtDuration(kwi.left)} left · next ping ${kwi.next ?? ''} · every ${fmtDuration(kwi.every)}`
+      : kwi.always ? 'off until next session (always)' : 'off (/keepwarm arms 6h)'))
+    if (kwi.lastPing) lines.push(row('last ping', `${fmtTokens(kwi.lastPing.read)} read · ${fmtUsd(kwi.lastPing.usd)}`))
+    if (breakEven !== undefined) lines.push(row('break-even', `${breakEven} pings = one cold write, ~${fmtDuration(breakEven * kwi.every)} idle`))
+    if (last && cold != null) {
+      lines.push(row('cold write', `${fmtUsd(cold)} ${isColdNow ? `· cold now: the next message re-writes ${fmtTokens(tokens)}` : `to re-write ${fmtTokens(tokens)}`}` +
+        (warm != null ? ` (warm turn ${fmtUsd(warm)})` : '')))
+    }
+    lines.push(row('guard', guard === 'refuse' ? 'refuse once' : guard === 'warn' ? 'warn only' : 'off'))
+    if (pctPerUsd !== undefined && cold != null && warm != null) {
+      lines.push(row('5h window', `≈ ${(cold * pctPerUsd).toFixed(1)}% cold · ${(warm * pctPerUsd).toFixed(1)}% warm (experimental, ${sessionsText()})`))
+    }
+    lines.push(row('this session', `${misses.length} cold write${misses.length === 1 ? '' : 's'} · ${fmtUsd(paid)}`))
+    return lines.join('\n')
+  }
+
   on('command.run', { command: COMMAND }, async ($, e) => {
-    if (e.args.trim().toLowerCase() === 'stop') {
+    const arg = e.args.trim().toLowerCase()
+    if (arg === 'stop') {
       await $.ui.close({ id: PANE }).catch(() => undefined)
       isPaneOpen = false
       return { text: 'cache table closed' }
     }
+    // nothing draws the pane under Remote Control: answer in text
+    const surfaces = await $.session.surfaces().catch(() => [])
+    if (arg === 'text' || surfaces.length === 0) return { text: textSummary(Date.now()) }
     await openPane($)
     const { advice } = current(policy, Date.now())
     return { text: `${ttl} cache (${ttlSource}) · ${advice.text} · /${COMMAND} stop closes` }
