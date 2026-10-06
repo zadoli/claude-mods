@@ -667,7 +667,7 @@ export const register: Register = (on, options) => {
   function textSummary(now: number): string {
     const { last, advice, left } = current(policy, now)
     const kwi = keepwarmInfo(now)
-    const { tokens, cold, warm } = coldPrice()
+    const { cold, warm } = coldPrice()
     const isColdNow = coldSince(now) !== undefined
     const price = priceOf(last?.model ?? '')
     const rate = writeRate(last?.model ?? '')
@@ -677,10 +677,9 @@ export const register: Register = (on, options) => {
     const row = (label: string, value: string) => `${label.padEnd(LABEL_W)}${value}`
     // the engine prefixes the plugin's name to the first line
     const lines = [advice.text]
-    lines.push(row('lifetime', `${ttl} (${ttlSource})`))
     if (counting) lines.push(row('expires in', left > 0 ? fmtClock(left) : '0:00'))
     if (last) {
-      lines.push(row('last request', `${pct1(hitRatio(last))} hit · read ${fmtTokens(last.read)} · wrote ${fmtTokens(last.write)} · new ${fmtTokens(last.fresh)}`))
+      lines.push(row('last request', `${pct1(hitRatio(last))} hit`))
     }
     lines.push(row('keepwarm', kwi.stopped ? `stopped: ${kwi.stopped}`
       : kwi.on ? `${fmtDuration(kwi.left)} left · next ping ${kwi.next ?? ''} · every ${fmtDuration(kwi.every)}`
@@ -688,7 +687,7 @@ export const register: Register = (on, options) => {
     if (kwi.lastPing) lines.push(row('last ping', `${fmtTokens(kwi.lastPing.read)} read · ${fmtUsd(kwi.lastPing.usd)}`))
     if (breakEven !== undefined) lines.push(row('break-even', `${breakEven} pings = one cold write, ~${fmtDuration(breakEven * kwi.every)} idle`))
     if (last && cold != null) {
-      lines.push(row('cold write', `${fmtUsd(cold)} ${isColdNow ? `· cold now: the next message re-writes ${fmtTokens(tokens)}` : `to re-write ${fmtTokens(tokens)}`}` +
+      lines.push(row('cold write', `${fmtUsd(cold)}${isColdNow ? ' · cold now: the next message pays it' : ''}` +
         (warm != null ? ` (warm turn ${fmtUsd(warm)})` : '')))
     }
     lines.push(row('guard', guard === 'refuse' ? 'refuse once' : guard === 'warn' ? 'warn only' : 'off'))
