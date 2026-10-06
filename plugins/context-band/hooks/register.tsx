@@ -103,13 +103,8 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {rest}
-        {/* a rule between the rows above (the cache band) and this one, only when there are any; clipped, not truncated, so no ellipsis */}
-        {rest ? (
-          <Box height={1} overflow="hidden">
-            <Text dimColor wrap="wrap">{'─'.repeat(e.props.bodyColumns)}</Text>
-          </Box>
-        ) : null}
-        <Box flexDirection="row" columnGap={2}>
+        {/* a gap under the rows above (the cache band), only when there are any */}
+        <Box flexDirection="row" columnGap={2} marginTop={rest ? 1 : 0}>
           <Text color="blue" wrap="truncate-start">{`📁 ${cwd}`}</Text>
           {branch ? <Text color="green">{`⎇ ${branch}`}</Text> : null}
           {skill ? <Text color="yellow">{`⚡ ${skill}`}</Text> : null}
