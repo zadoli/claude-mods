@@ -498,6 +498,14 @@ async function calibrate($: EngineInterface) {
   }
 }
 
+/** recount the active sessions from the store, for /cache between turns */
+async function refreshActive($: EngineInterface) {
+  if (!winResetsAt) return
+  const keys = (await $.store.keys()).filter(k => k.startsWith(`${KEY_SPEND}:`))
+  const all = await Promise.all(keys.map(async k => [k, await $.store.get(k)] as [string, unknown]))
+  activeSessions = windowSpend(all, winResetsAt, Date.now()).active
+}
+
 const sessionsText = () => `${activeSessions} active session${activeSessions === 1 ? '' : 's'}`
 
 function pushSample(sample: Sample) {
@@ -699,6 +707,7 @@ export const register: Register = (on, options) => {
       return { text: 'cache table closed' }
     }
     // nothing draws the pane under Remote Control: answer in text
+    await refreshActive($).catch(() => undefined)
     const surfaces = await $.session.surfaces().catch(() => [])
     if (arg === 'text' || surfaces.length === 0) return { text: textSummary(Date.now()) }
     await openPane($)
