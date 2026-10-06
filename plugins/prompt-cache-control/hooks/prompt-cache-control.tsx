@@ -667,12 +667,11 @@ export const register: Register = (on, options) => {
     const paid = misses.reduce((a, m) => a + (m.usd ?? 0), 0)
     const counting = !!last && advice.kind !== 'uncached' && advice.kind !== 'off'
     const row = (label: string, value: string) => `${label.padEnd(LABEL_W)}${value}`
-    const lines = [`cache: ${advice.text}`]
+    // the engine prefixes the plugin's name to the first line
+    const lines = [advice.text]
     lines.push(row('lifetime', `${ttl} (${ttlSource})`))
     if (counting) lines.push(row('expires in', left > 0 ? fmtClock(left) : '0:00'))
     if (last) {
-      lines.push(row('model', last.model))
-      lines.push(row('prompt', `${fmtTokens(promptTokens(last))} tokens`))
       lines.push(row('last request', `${pct1(hitRatio(last))} hit · read ${fmtTokens(last.read)} · wrote ${fmtTokens(last.write)} · new ${fmtTokens(last.fresh)}`))
     }
     lines.push(row('keepwarm', kwi.stopped ? `stopped: ${kwi.stopped}`
