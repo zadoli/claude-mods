@@ -343,3 +343,26 @@ export function calibRate(pct0: number, usd0: number, pct: number, usd: number):
   const du = usd - usd0
   return dp >= 0.5 && du > 0 ? dp / du : undefined
 }
+
+/** one session's spend in a plan window, as each session writes it to the shared store */
+export type Spend = { resetsAt: string; usd: number; at: number }
+
+/**
+ * Every session's spend in the window that resets at `resetsAt`, summed; how
+ * many of them wrote within `activeMs`; and the keys left from other windows.
+ */
+export function windowSpend(entries: [string, unknown][], resetsAt: string, now: number, activeMs = 10 * 60_000) {
+  let usd = 0
+  let active = 0
+  const stale: string[] = []
+  for (const [key, v] of entries) {
+    const s = v as Partial<Spend> | undefined
+    if (!s || s.resetsAt !== resetsAt || typeof s.usd !== 'number') {
+      stale.push(key)
+      continue
+    }
+    usd += s.usd
+    if (typeof s.at === 'number' && now - s.at <= activeMs) active++
+  }
+  return { usd, active, stale }
+}

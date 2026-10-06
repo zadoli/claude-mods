@@ -38,6 +38,8 @@
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 import {
   calibRate,
+  windowSpend,
+  type Spend,
   guardVerdict,
   isColdWrite,
   advise,
@@ -440,15 +442,23 @@ let ackedAt = 0
 
 // ---- experimental: list price as a share of the 5-hour plan window. The engine
 // reports the window's percentUsed but not its size, so this session's spend at
-// list price is set against how far the window moved. Other sessions drawing on
-// the same window make it read high.
+// list price is set against how far the window moved. Each session writes its
+// spend in the window under `spend:<sid>` in the shared store and the estimate
+// sums them all; sessions without this mod (claude.ai, other machines) still
+// make it read high.
 const KEY_CALIB = 'calib.pctPerUsd'
+const KEY_SPEND = 'spend'
 /** this session's spend at list price, requests and keepwarm pings */
 let spentUsd = 0
-/** where the window and the spend stood when this window was first seen */
+/** the window this session last wrote its spend for, and spentUsd when that window began for it */
+let winResetsAt: string | undefined
+let winBase = 0
+/** where the window and every session's spend stood when this window was first seen */
 let anchor: { resetsAt: string; pct: number; usd: number } | undefined
 /** the last estimate: percent of the 5-hour window per list-price dollar */
 let pctPerUsd: number | undefined
+/** sessions that wrote their spend in the last 10 minutes, this one included */
+let activeSessions = 0
 
 /** a call's list price: cache read, cache write at the TTL in force, uncached input at base (half the 1h write rate), output */
 function usdOf(u: { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }, model: string): number | null {
@@ -462,16 +472,33 @@ function usdOf(u: { input_tokens: number; output_tokens: number; cache_read_inpu
 async function calibrate($: EngineInterface) {
   const w = (await $.session.usage().catch(() => undefined))?.rateLimits?.find(x => x.kind === 'five_hour')
   if (!w || !w.resetsAt) return
+  const mine = keyOf(KEY_SPEND)
+  if (winResetsAt !== w.resetsAt) {
+    // a reload zeroes spentUsd: carry on from what this session wrote for the same window
+    const saved = winResetsAt === undefined ? ((await $.store.get(mine)) as Partial<Spend> | undefined) : undefined
+    winBase = saved?.resetsAt === w.resetsAt && typeof saved.usd === 'number' ? spentUsd - saved.usd : spentUsd
+    winResetsAt = w.resetsAt
+  }
+  const now = Date.now()
+  await $.store.set(mine, { resetsAt: w.resetsAt, usd: spentUsd - winBase, at: now } satisfies Spend)
+  // ponytail: one JSON file for every session, two writing at once can drop one write; the next turn rewrites it
+  const keys = (await $.store.keys()).filter(k => k.startsWith(`${KEY_SPEND}:`))
+  const all = await Promise.all(keys.map(async k => [k, await $.store.get(k)] as [string, unknown]))
+  const { usd, active, stale } = windowSpend(all, w.resetsAt, now)
+  activeSessions = active
+  for (const k of stale) await $.store.delete(k)
   if (!anchor || anchor.resetsAt !== w.resetsAt || w.percentUsed < anchor.pct) {
-    anchor = { resetsAt: w.resetsAt, pct: w.percentUsed, usd: spentUsd }
+    anchor = { resetsAt: w.resetsAt, pct: w.percentUsed, usd }
     return
   }
-  const r = calibRate(anchor.pct, anchor.usd, w.percentUsed, spentUsd)
+  const r = calibRate(anchor.pct, anchor.usd, w.percentUsed, usd)
   if (r !== undefined) {
     pctPerUsd = r
     await $.store.set(KEY_CALIB, r)
   }
 }
+
+const sessionsText = () => `${activeSessions} active session${activeSessions === 1 ? '' : 's'}`
 
 function pushSample(sample: Sample) {
   samples.push(sample)
@@ -528,6 +555,9 @@ export const register: Register = (on, options) => {
     // a reload with status turned off leaves the previous load's entry behind
     if (!showStatus) $.ui.status(undefined)
     spentUsd = 0
+    winResetsAt = undefined
+    winBase = 0
+    activeSessions = 0
     anchor = undefined
     const savedRate = await $.store.get(KEY_CALIB).catch(() => undefined)
     pctPerUsd = typeof savedRate === 'number' && savedRate > 0 ? savedRate : undefined
@@ -802,9 +832,9 @@ export const register: Register = (on, options) => {
             <Text key="s" dimColor>{sp('on a cold cache of 50k+ tokens')}</Text>),
           pctPerUsd !== undefined && cold != null && warm != null
             ? row('$:plan', '5h window', <Text key="v" bold color="magenta">{sp(`≈ ${(cold * pctPerUsd).toFixed(1)}% cold · ${(warm * pctPerUsd).toFixed(1)}% warm`)}</Text>,
-                <Text key="s" dimColor>{sp(`🧪 experimental · ${pctPerUsd.toFixed(2)}% per $`)}</Text>)
+                <Text key="s" dimColor>{sp(`🧪 experimental · ${pctPerUsd.toFixed(2)}% per $ · ${sessionsText()}`)}</Text>)
             : anchor
-              ? row('$:plan', '5h window', <Text key="v" dimColor>{sp('🧪 calibrating…')}</Text>)
+              ? row('$:plan', '5h window', <Text key="v" dimColor>{sp(`🧪 calibrating… · ${sessionsText()}`)}</Text>)
               : null,
           row('$:session', 'this session', <Text key="v" bold color={misses.length ? 'red' : undefined}>{sp(`${misses.length} cold write${misses.length === 1 ? '' : 's'} · ${fmtUsd(paid)}`)}</Text>),
         ])}

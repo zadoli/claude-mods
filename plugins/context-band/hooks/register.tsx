@@ -103,6 +103,8 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {rest}
+        {/* a rule between the rows above (the cache band) and this one */}
+        <Text dimColor wrap="truncate-end">{'─'.repeat(e.viewport?.columns ?? 80)}</Text>
         <Box flexDirection="row" columnGap={2}>
           <Text color="blue" wrap="truncate-start">{`📁 ${cwd}`}</Text>
           {branch ? <Text color="green">{`⎇ ${branch}`}</Text> : null}

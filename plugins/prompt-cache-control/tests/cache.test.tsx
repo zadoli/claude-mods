@@ -18,6 +18,7 @@ import {
   remainingMs,
   resolveTtl,
   calibRate,
+  windowSpend,
   guardVerdict,
   isColdWrite,
 } from '../hooks/cache.ts'
@@ -409,5 +410,19 @@ describe('plan window estimate (experimental)', () => {
     expect(calibRate(10, 1, 12, 3)).toBe(1)
     expect(calibRate(10, 1, 10.4, 3)).toBeUndefined()
     expect(calibRate(10, 1, 11, 1)).toBeUndefined()
+  })
+
+  test('sums every session in the window, counts the recent ones, drops other windows', () => {
+    const r = windowSpend(
+      [
+        ['spend:a', { resetsAt: 'W', usd: 2, at: T0 }],
+        ['spend:b', { resetsAt: 'W', usd: 1.5, at: T0 - 20 * 60_000 }],
+        ['spend:c', { resetsAt: 'old', usd: 9, at: T0 }],
+        ['spend:d', null],
+      ],
+      'W',
+      T0,
+    )
+    expect(r).toEqual({ usd: 3.5, active: 1, stale: ['spend:c', 'spend:d'] })
   })
 })
