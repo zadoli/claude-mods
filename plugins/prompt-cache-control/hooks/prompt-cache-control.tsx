@@ -736,19 +736,23 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const columns = e.viewport?.columns ?? 100
     const color = COLOR[advice.kind]
-    // other mods' rows above the prompt come back from next(e); ours goes under them
+    // other mods' rows above the prompt come back from next(e). Ours goes on top, with a gap before theirs,
+    // so the order does not hang on which mod the engine loaded first (it differs by install source)
     const rest = await next(e)
+    const band = (row: RenderChildren) => (
+      <Box flexDirection="column">
+        {row}
+        {rest ? <Box key="rest" flexDirection="column" marginTop={1}>{rest}</Box> : null}
+      </Box>
+    )
 
     // no request yet (new session, /clear, a plugin reload): a placeholder row, so the band does not vanish
     if (!last) {
-      return (
-        <Box flexDirection="column">
-          {rest}
-          <Box flexDirection="row" columnGap={1}>
-            <Text dimColor wrap="truncate-end">{advice.kind === 'off' ? `cache: ${advice.text}` : '○ cache · waiting for the first request'}</Text>
-            <Button key="open" label="details" onPress={() => openPane($)} />
-          </Box>
-        </Box>
+      return band(
+        <Box key="cache" flexDirection="row" columnGap={1}>
+          <Text dimColor wrap="truncate-end">{advice.kind === 'off' ? `cache: ${advice.text}` : '○ cache · waiting for the first request'}</Text>
+          <Button key="open" label="details" onPress={() => openPane($)} />
+        </Box>,
       )
     }
 
@@ -756,10 +760,8 @@ export const register: Register = (on, options) => {
     const wide = columns >= 90
     const kw = keepwarmStatus(Date.now())
     const cold = coldStatus(Date.now())
-    return (
-      <Box flexDirection="column">
-      {rest}
-      <Box flexDirection="row" columnGap={1}>
+    return band(
+      <Box key="cache" flexDirection="row" columnGap={1}>
         <Text bold color={color}>{advice.kind === 'warm' ? '●' : advice.kind === 'soon' ? '▲' : advice.kind === 'off' || advice.kind === 'cold' || advice.kind === 'uncached' ? '○' : '✖'}</Text>
         <Text bold color="cyan">cache</Text>
         <Text color={color}>{bar(ratio, wide ? 10 : 6)}</Text>
@@ -780,8 +782,7 @@ export const register: Register = (on, options) => {
         {cold && <Text color="cyan">{cold}</Text>}
         <Button key="open" label="details" onPress={() => openPane($)} />
         <Text dimColor wrap="truncate-end">{`${ttl} · ${advice.text}`}</Text>
-      </Box>
-      </Box>
+      </Box>,
     )
   })
 
