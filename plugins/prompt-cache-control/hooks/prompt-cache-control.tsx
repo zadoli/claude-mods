@@ -912,7 +912,7 @@ export const register: Register = (on, options) => {
             <Text key="s" dimColor>{sp('on a cold cache of 50k+ tokens')}</Text>),
           pctPerUsd !== undefined && cold != null && warm != null
             ? row('$:plan', '5h window', <Text key="v" bold color="magenta">{sp(`≈ ${(cold * pctPerUsd).toFixed(1)}% cold · ${(warm * pctPerUsd).toFixed(1)}% warm`)}</Text>,
-                <Text key="s" dimColor>{sp(`🧪 experimental · ${pctPerUsd.toFixed(2)}% per $ · ${sessionsText()}`)}</Text>)
+                <Text key="s" dimColor>{sp(`🧪 ${pctPerUsd.toFixed(2)}% per $ · ${sessionsText()}`)}</Text>)
             : anchor
               ? row('$:plan', '5h window', <Text key="v" dimColor>{sp(`🧪 calibrating… · ${sessionsText()}`)}</Text>)
               : null,
@@ -928,10 +928,12 @@ export const register: Register = (on, options) => {
             {cell('h:new', 5, 'new', 'cyan', true)}
             {cell('h:hit', 6, 'hit', 'magenta', true)}
             {cell('h:usd', 6, 'cost', 'cyan', true)}
+            {pctPerUsd !== undefined ? cell('h:pct', 7, '5h% 🧪', 'magenta', true) : null}
           </Box>,
           ...rows.map((r, i) => {
             const n = all.length - rows.length + i + 1
             const pct = Math.round(rowRatio(r) * 100)
+            const usd = turnUsd(r.turnId)
             return (
               <Box key={`t:${r.turnId}`} flexDirection="row" columnGap={1}>
                 {cell(`c:turn:${r.turnId}`, 4, r.turnId.startsWith('keepwarm-') ? '♨' : String(n))}
@@ -940,7 +942,8 @@ export const register: Register = (on, options) => {
                 {cell(`c:wrote:${r.turnId}`, 6, fmtTokens(r.write), 'yellow')}
                 {cell(`c:new:${r.turnId}`, 5, fmtTokens(r.fresh), 'cyan')}
                 {cell(`c:hit:${r.turnId}`, 6, pct1(rowRatio(r)), hitColor(pct), true)}
-                {cell(`c:usd:${r.turnId}`, 6, fmtUsd(turnUsd(r.turnId)))}
+                {cell(`c:usd:${r.turnId}`, 6, fmtUsd(usd))}
+                {pctPerUsd !== undefined ? cell(`c:pct:${r.turnId}`, 7, usd == null ? 'n/a' : `${(usd * pctPerUsd).toFixed(1)}%`, 'magenta') : null}
               </Box>
             )
           }),
