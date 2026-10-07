@@ -259,6 +259,15 @@ describe('the band', () => {
     expect(calls.logs.join('\n')).toContain('5m cache (the ttl option)')
   })
 
+  test('before the first request the band shows a placeholder, not nothing', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    const ui = await band($)
+    expect(await ui.find({ type: 'Text', text: /waiting for the first request/ })).toBeDefined()
+    await ui.unmount()
+  })
+
   test('a request that touched no cache shows no countdown', async ($, on) => {
     const calls: Calls = { status: [], logs: [] }
     fakeEngine(on, {}, calls, { read: 0, write: 0 })
@@ -403,6 +412,29 @@ describe('the pane', () => {
       await ui.unmount()
     })
   }
+
+  test('the keepwarm button starts and stops the window', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    on('store.set', () => ({ value: undefined }) as never)
+    on('store.delete', () => ({ value: undefined }) as never)
+    on('clock.after', () => ({ value: undefined }) as never)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    await step($)
+    // fakeEngine swallows ui.invalidate: mount afresh to see each press
+    const pane = () => $.ui.mount({ plugin: 'prompt-cache-control', surface: 'terminal', component: 'Pane', requestId: 'cache', props: { bodyColumns: 70 } } as never)
+    let ui = await pane()
+    expect(await ui.find({ type: 'Text', text: 'off' })).toBeDefined()
+    await ui.press({ key: 'kw-start' })
+    await ui.unmount()
+    ui = await pane()
+    expect(await ui.find({ type: 'Text', text: /6h00m left/ })).toBeDefined()
+    await ui.press({ key: 'kw-stop' })
+    await ui.unmount()
+    ui = await pane()
+    expect(await ui.find({ type: 'Text', text: 'off' })).toBeDefined()
+    await ui.unmount()
+  })
 })
 
 describe('plan window estimate (experimental)', () => {

@@ -47,7 +47,6 @@ import {
   COUNTDOWN_MARKS,
   bar,
   byTurn,
-  fit,
   fmtClock,
   fmtTokens,
   hitRatio,
@@ -703,6 +702,7 @@ export const register: Register = (on, options) => {
     if (arg === 'stop') {
       await $.ui.close({ id: PANE }).catch(() => undefined)
       isPaneOpen = false
+      $.ui.invalidate('ui.render')
       return { text: 'cache table closed' }
     }
     // nothing draws the pane under Remote Control: answer in text
@@ -717,26 +717,40 @@ export const register: Register = (on, options) => {
   on('ui.close', async ($, e, next) => {
     if (e.id !== PANE) return next(e)
     isPaneOpen = false
+    // the band hides while the pane is open: draw it again now, not at the next countdown tick
+    $.ui.invalidate('ui.render')
     return next(e)
   })
 
   on('ui.press', async ($, e, next) => {
     if (e.plugin !== $.plugin.name || e.requestId !== PANE) return next(e)
     if (e.element === 'close') await $.ui.close({ id: PANE }).catch(() => undefined)
+    if (e.element === 'kw-start') await startWindow($, DEFAULT_WINDOW_MS, 0)
+    if (e.element === 'kw-stop') await stop($, null, true)
     return next(e)
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (!showBand || e.props.hasSurvey || isPaneOpen) return next(e)
     const { last, advice, left } = current(policy, Date.now())
-    if (!last && advice.kind !== 'off') return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const columns = e.viewport?.columns ?? 100
     const color = COLOR[advice.kind]
     // other mods' rows above the prompt come back from next(e); ours goes under them
     const rest = await next(e)
 
-    if (!last) return <Box flexDirection="column">{rest}<Text dimColor>{fit(`cache: ${advice.text}`, columns)}</Text></Box>
+    // no request yet (new session, /clear, a plugin reload): a placeholder row, so the band does not vanish
+    if (!last) {
+      return (
+        <Box flexDirection="column">
+          {rest}
+          <Box flexDirection="row" columnGap={1}>
+            <Text dimColor wrap="truncate-end">{advice.kind === 'off' ? `cache: ${advice.text}` : '○ cache · waiting for the first request'}</Text>
+            <Button key="open" label="details" onPress={() => openPane($)} />
+          </Box>
+        </Box>
+      )
+    }
 
     const ratio = hitRatio(last)
     const wide = columns >= 90
@@ -833,6 +847,11 @@ export const register: Register = (on, options) => {
       return solid(key, [[w, c], [barW - w, 'gray']])
     }
 
+    // same as /keepwarm and /keepwarm off; handled in ui.press like close
+    const kwButton = kwi.on
+      ? <Button key="kw-stop" label="stop" onPress={() => {}} />
+      : <Button key="kw-start" label={`start ${DEFAULT_WINDOW_MS / 3600000}h`} onPress={() => {}} />
+
     return (
       <Box flexDirection="column">
         <Box key="title" flexDirection="row" columnGap={1}>
@@ -859,11 +878,11 @@ export const register: Register = (on, options) => {
 
         {section('kw', 'KEEPWARM', [
           kwi.stopped
-            ? row('k:state', 'status', <Text key="v" bold color="red">{sp(`stopped: ${kwi.stopped}`)}</Text>)
+            ? row('k:state', 'status', <Text key="v" bold color="red">{sp(`stopped: ${kwi.stopped}`)}</Text>, kwButton)
             : kwi.on
               ? row('k:state', 'window', bar('kwbar', kwi.left / kwi.window, 'magenta'),
-                  <Text key="v" bold color="magenta">{sp(`${fmtDuration(kwi.left)} left`)}</Text>)
-              : row('k:state', 'status', <Text key="v" bold>{sp(kwi.always ? 'off until next session (always)' : 'off')}</Text>, <Text key="s" dimColor>{sp('/keepwarm arms 6h')}</Text>),
+                  <Text key="v" bold color="magenta">{sp(`${fmtDuration(kwi.left)} left`)}</Text>, kwButton)
+              : row('k:state', 'status', <Text key="v" bold>{sp(kwi.always ? 'off until next session (always)' : 'off')}</Text>, kwButton),
           kwi.on ? row('k:next', 'next ping', <Text key="v" bold>{sp(kwi.next ?? '')}</Text>, <Text key="s" dimColor>{sp(`every ${fmtDuration(kwi.every)}`)}</Text>) : null,
           kwi.lastPing ? row('k:last', 'last ping', <Text key="v" bold>{sp(`${fmtTokens(kwi.lastPing.read)} read · ${fmtUsd(kwi.lastPing.usd)}`)}</Text>) : null,
           breakEven !== undefined ? row('k:be', 'break-even', <Text key="v" bold>{sp(`${breakEven} pings`)}</Text>,

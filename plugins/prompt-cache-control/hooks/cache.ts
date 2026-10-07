@@ -233,10 +233,6 @@ export const rowRatio = (r: TurnRow) => {
   return total === 0 ? 0 : r.read / total
 }
 
-export function fit(text: string, width: number): string {
-  return text.length <= width ? text : `${text.slice(0, Math.max(0, width - 1))}…`
-}
-
 export function positive(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fallback
 }
