@@ -406,7 +406,7 @@ describe('the pane', () => {
       await $.session.start({ cwd: '/repo', surface, isInteractive: true } as never)
       await step($)
       const ui = await $.ui.mount({ plugin: 'prompt-cache-control', surface, component: 'Pane', requestId: 'cache', props: { bodyColumns: 70 } } as never)
-      for (const text of [/CACHE/, /LAST.REQUEST/, /KEEPWARM/, /COST/, /TURNS/, /hit.rate/, /cold.write/, /98\.4%/]) {
+      for (const text of [/CACHE/, /LAST.REQUEST/, /KEEPWARM/, /COST/, /TURNS/, /hit.rate/, /cold.write/, /98\.4%/, /^cost$/, /^\$0\.0\d$/]) {
         expect(await ui.find({ type: 'Text', text })).toBeDefined()
       }
       await ui.unmount()

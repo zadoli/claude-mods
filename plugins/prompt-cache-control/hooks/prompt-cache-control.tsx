@@ -467,6 +467,18 @@ function usdOf(u: { input_tokens: number; output_tokens: number; cache_read_inpu
   return (u.cache_read_input_tokens * price[0] + u.cache_creation_input_tokens * rate + (u.input_tokens * price[1]) / 2 + u.output_tokens * price[2]) / 1e6
 }
 
+/** a turn's requests at list price, each at its own model's rates; null when a model's price is unknown */
+function turnUsd(turnId: string): number | null {
+  let sum = 0
+  for (const x of samples) {
+    if (x.turnId !== turnId) continue
+    const usd = usdOf({ input_tokens: x.fresh, output_tokens: x.output, cache_read_input_tokens: x.read, cache_creation_input_tokens: x.write }, x.model)
+    if (usd == null) return null
+    sum += usd
+  }
+  return sum
+}
+
 /** after a turn: move the anchor on a new window, otherwise update the estimate */
 async function calibrate($: EngineInterface) {
   const w = (await $.session.usage().catch(() => undefined))?.rateLimits?.find(x => x.kind === 'five_hour')
@@ -908,15 +920,15 @@ export const register: Register = (on, options) => {
         ])}
 
         {section('turns', 'TURNS', [
-          <Box key="head" flexDirection="row" columnGap={1}>
+          rows.length === 0 ? <Text key="none" dimColor>{sp('no requests yet')}</Text> : <Box key="head" flexDirection="row" columnGap={1}>
             {cell('h:turn', 4, 'turn', 'cyan', true)}
             {cell('h:steps', 5, 'steps', 'cyan', true)}
             {cell('h:read', 6, 'read', 'green', true)}
             {cell('h:wrote', 6, 'wrote', 'yellow', true)}
             {cell('h:new', 5, 'new', 'cyan', true)}
             {cell('h:hit', 6, 'hit', 'magenta', true)}
+            {cell('h:usd', 6, 'cost', 'cyan', true)}
           </Box>,
-          rows.length === 0 ? <Text key="none" dimColor>{sp('no requests yet')}</Text> : null,
           ...rows.map((r, i) => {
             const n = all.length - rows.length + i + 1
             const pct = Math.round(rowRatio(r) * 100)
@@ -928,6 +940,7 @@ export const register: Register = (on, options) => {
                 {cell(`c:wrote:${r.turnId}`, 6, fmtTokens(r.write), 'yellow')}
                 {cell(`c:new:${r.turnId}`, 5, fmtTokens(r.fresh), 'cyan')}
                 {cell(`c:hit:${r.turnId}`, 6, pct1(rowRatio(r)), hitColor(pct), true)}
+                {cell(`c:usd:${r.turnId}`, 6, fmtUsd(turnUsd(r.turnId)))}
               </Box>
             )
           }),
