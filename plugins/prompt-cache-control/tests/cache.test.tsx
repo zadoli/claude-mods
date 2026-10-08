@@ -217,6 +217,24 @@ describe('the band', () => {
     expect(calls.status.at(-1)).toMatch(/^cache 98\.4% · [45]:\d\d$/)
   })
 
+  test('a restart under the same session keeps the last request, not "waiting for the first request"', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    on('session.id', () => ({ value: 's1' }) as never)
+    const store = new Map<string, unknown>()
+    on('store.get', ($, e) => ({ value: store.get((e as { key: string }).key) }) as never)
+    on('store.set', ($, e) => (store.set((e as { key: string }).key, (e as { value: unknown }).value), { value: undefined }) as never)
+    on('store.delete', ($, e) => (store.delete((e as { key: string }).key), { value: undefined }) as never)
+    on('store.keys', () => ({ value: [...store.keys()] }) as never)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    await step($)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    const ui = await band($)
+    expect(await ui.find({ type: 'Text', text: /98\.4%/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /waiting for the first request/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
   test('a subagent request is not the main loop and leaves the meter alone', { options: { status: true } }, async ($, on) => {
     const calls: Calls = { status: [], logs: [] }
     fakeEngine(on, {}, calls)

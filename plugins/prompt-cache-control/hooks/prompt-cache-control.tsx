@@ -338,7 +338,7 @@ async function ping($: EngineInterface) {
     : null
   lastPing = { read: u.cache_read_input_tokens, usd }
   if (usd != null) spentUsd += usd
-  pushSample({
+  await pushSample($, {
     turnId: `keepwarm-${now}`,
     index: 0,
     model,
@@ -519,10 +519,29 @@ async function refreshActive($: EngineInterface) {
 
 const sessionsText = () => `${activeSessions} active session${activeSessions === 1 ? '' : 's'}`
 
-function pushSample(sample: Sample) {
+// the engine's process can stop under an idle session and start again on resume, which runs session.start
+// with the module's variables zeroed: keep the latest requests in the store, under `samples:<sid>`
+const KEY_SAMPLES = 'samples'
+const SAVED = 30
+const SAVED_FOR_MS = 7 * 24 * 60 * 60 * 1000
+
+async function pushSample($: EngineInterface, sample: Sample) {
   samples.push(sample)
   if (samples.length > KEEP) samples = samples.slice(-KEEP)
   lastKey = ''
+  await $.store.set(keyOf(KEY_SAMPLES), { at: Date.now(), samples: samples.slice(-SAVED) }).catch(() => undefined)
+}
+
+/** this session's saved requests; drops other sessions' older than a week */
+async function restoreSamples($: EngineInterface): Promise<Sample[]> {
+  const now = Date.now()
+  let mine: Sample[] = []
+  for (const k of (await $.store.keys()).filter(k => k.startsWith(`${KEY_SAMPLES}:`))) {
+    const v = (await $.store.get(k)) as { at?: number; samples?: Sample[] } | undefined
+    if (k === keyOf(KEY_SAMPLES)) mine = Array.isArray(v?.samples) ? v.samples : []
+    else if (!v || typeof v.at !== 'number' || now - v.at > SAVED_FOR_MS) await $.store.delete(k)
+  }
+  return mine
 }
 
 export const register: Register = (on, options) => {
@@ -580,6 +599,9 @@ export const register: Register = (on, options) => {
     anchor = undefined
     const savedRate = await $.store.get(KEY_CALIB).catch(() => undefined)
     pctPerUsd = typeof savedRate === 'number' && savedRate > 0 ? savedRate : undefined
+    // a resumed session, or a restarted process under it, goes on from its saved requests
+    sid = await $.session.id().catch(() => '')
+    samples = sid ? await restoreSamples($).catch(() => []) : []
     // keepwarm failing to start must not take the meter down with it
     try {
       await keepwarmStart($)
@@ -638,7 +660,7 @@ export const register: Register = (on, options) => {
     const startedAt = Date.now()
     const r = yield* next(e)
     if (r.usage) {
-      samples.push({
+      await pushSample($, {
         turnId: e.turnId,
         index: e.index,
         model: r.usage.model || e.model,
@@ -648,7 +670,6 @@ export const register: Register = (on, options) => {
         fresh: r.usage.input_tokens,
         output: r.usage.output_tokens,
       })
-      if (samples.length > KEEP) samples = samples.slice(-KEEP)
       if (!pinned) {
         // the account can change under a session: a subscription running out of plan usage moves to usage credits
         account = accountOf((await $.session.usage().catch(() => undefined))?.rateLimits ?? [])
