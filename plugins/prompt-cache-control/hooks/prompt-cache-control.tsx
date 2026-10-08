@@ -201,6 +201,8 @@ let always = false
 let compacted = false
 let stopped: string | null = null
 let lastPing: Ping | null = null
+// ponytail: in memory, a restart under an open window starts the count again
+let pings = 0 // pings in the current window, for the band
 let pending: { cancel: () => void } | null = null
 
 const period = () => every || defaultEvery(ttlMs(ttl))
@@ -214,7 +216,7 @@ function keepwarmStatus(now: number): { text: string; stopped: boolean } | undef
   const next = !lastAt() || compacted ? 'waiting for a turn'
     : isCold(now) ? 'cold'
     : `ping ${fmtDuration(lastAt() + period() - now)}`
-  const last = lastPing ? ` · last ${fmtTokens(lastPing.read)} ${fmtUsd(lastPing.usd)}` : ''
+  const last = pings ? ` · ${pings} ping${pings === 1 ? '' : 's'}` : ''
   return { text: `♨ keepwarm ${fmtDuration(deadline - now)} · ${next}${last}`, stopped: false }
 }
 
@@ -269,6 +271,7 @@ async function keepwarmEnd($: EngineInterface, reason: string) {
   if (reason === 'clear') {
     await stop($, null)
     lastPing = null
+    pings = 0
     misses = []
     ackedAt = 0
     coldWritePending = false
@@ -338,6 +341,7 @@ async function ping($: EngineInterface) {
     ? (u.cache_read_input_tokens * price[0] + u.cache_creation_input_tokens * price[1] + (u.input_tokens * price[1]) / 2 + u.output_tokens * price[2]) / 1e6
     : null
   lastPing = { read: u.cache_read_input_tokens, usd }
+  pings++
   if (usd != null) spentUsd += usd
   await pushSample($, {
     turnId: `keepwarm-${now}`,
@@ -362,6 +366,7 @@ async function startWindow($: EngineInterface, windowMs: number, everyMs: number
   else await $.store.delete(keyOf(KEY_EVERY))
   windowStart = Date.now()
   deadline = windowStart + windowMs
+  pings = 0
   stopped = null
   await $.store.set(keyOf(KEY_DEADLINE), deadline)
   await arm($)
