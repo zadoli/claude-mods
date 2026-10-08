@@ -43,6 +43,7 @@ In `~/.claude/settings.json` (the key is `<plugin>@zadoli-mods` when installed f
 - `ttl`: `auto` | `5m` | `1h`. Pin `1h` behind a proxy (e.g. `ANTHROPIC_BASE_URL` to a local proxy) that drops the rate-limit headers the subscription is detected from.
 - `breakdown`: read / wrote / new in the band.
 - `status`: a short entry under the prompt.
+- `limit`: the 5-hour plan window under the prompt, `5h 42% · reset 2h13m` (on by default; only on a Claude subscription).
 - `guard`: `refuse` (stop a cold send once), `warn` (send and log the price), `off`.
 - also `warnSeconds`, `compactAtTokens`, `band`, `toast` (see the plugin's `plugin.json`).
 

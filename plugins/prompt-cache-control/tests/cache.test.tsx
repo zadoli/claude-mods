@@ -12,6 +12,7 @@ import {
   byTurn,
   fmtClock,
   fmtCountdown,
+  fmtLimit,
   fmtTokens,
   hitRatio,
   isCachingDisabled,
@@ -80,6 +81,12 @@ describe('the countdown counts from the start of the request', () => {
     expect(fmtCountdown(600_000)).toBe('10m')
     expect(fmtCountdown(2_159_000)).toBe('35m')
     expect(fmtCountdown(3_900_000)).toBe('1h05m')
+    const at = (ms: number) => new Date(T0 + ms).toISOString()
+    expect(fmtLimit({ percentUsed: 42, resetsAt: at(2 * 3600_000 + 13 * 60_000) }, T0)).toBe('5h 42% · reset 2h13m')
+    expect(fmtLimit({ percentUsed: 7.5, resetsAt: at(59 * 60_000 + 1) }, T0)).toBe('5h 7.5% · reset 1h00m')
+    expect(fmtLimit({ percentUsed: 7, resetsAt: at(-1) }, T0)).toBeUndefined()
+    expect(fmtLimit({ percentUsed: 7 }, T0)).toBe('5h 7%')
+    expect(fmtLimit(undefined, T0)).toBeUndefined()
     expect(fmtTokens(950)).toBe('950')
     expect(fmtTokens(84_200)).toBe('84.2k')
     expect(fmtTokens(182_000)).toBe('182k')
@@ -220,7 +227,7 @@ describe('the band', () => {
     fakeEngine(on, {}, calls)
     await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
 
-    expect(calls.status).toEqual([])
+    expect(calls.status.filter(Boolean)).toEqual([])
     await step($)
     const ui = await band($)
     expect(await ui.find({ type: 'Text', text: /98\.4%/ })).toBeDefined()
@@ -260,6 +267,24 @@ describe('the band', () => {
     const ui = await band($)
     expect(await ui.find({ type: 'Text', text: /· 2 pings$/ })).toBeDefined()
     await ui.unmount()
+  })
+
+  test('the 5-hour window goes under the prompt, after the cache entry when that is on', { options: { status: true } }, async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    const resetsAt = new Date(Date.now() + 2 * 3600_000 + 13 * 60_000 + 30_000).toISOString()
+    fakeEngine(on, {}, calls, undefined, [{ kind: 'five_hour', percentUsed: 42, resetsAt } as never])
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    expect(calls.status.at(-1)).toBe('5h 42% · reset 2h14m')
+    await step($)
+    expect(calls.status.at(-1)).toMatch(/^cache 98\.4% · 59m · 5h 42% · reset 2h1[34]m$/)
+  })
+
+  test('the limit option turns the 5-hour window off', { options: { limit: false } }, async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls, undefined, [{ kind: 'five_hour', percentUsed: 42, resetsAt: new Date(Date.now() + 3600_000).toISOString() } as never])
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    await step($)
+    expect(calls.status.filter(Boolean)).toEqual([])
   })
 
   test('a subagent request is not the main loop and leaves the meter alone', { options: { status: true } }, async ($, on) => {

@@ -49,6 +49,7 @@ import {
   byTurn,
   fmtClock,
   fmtCountdown,
+  fmtLimit,
   fmtTokens,
   hitRatio,
   isCachingDisabled,
@@ -81,6 +82,8 @@ let pinned = false
 let observed: Ttl | undefined
 let setting: unknown
 let account: Account = 'other'
+/** the 5-hour plan window as the last response reported it, for the line under the prompt */
+let fiveHour: { percentUsed: number; resetsAt?: string } | undefined
 let ttlSource = 'default'
 let envSource = 'default'
 let env: CacheEnv = {}
@@ -557,6 +560,10 @@ export const register: Register = (on, options) => {
   const showBand = options.band !== false
   const showBreakdown = options.breakdown !== false
   const showStatus = options.status === true
+  const showLimit = options.limit !== false
+  /** the entry under the prompt: the cache's short line and/or the 5-hour window */
+  const statusText = (now: number) =>
+    [showStatus ? shortLine(policy, now) : undefined, showLimit ? fmtLimit(fiveHour, now) : undefined].filter(Boolean).join(' · ') || undefined
   const wantToast = options.toast !== false
   const guard: GuardMode = options.guard === 'warn' || options.guard === 'off' ? options.guard : 'refuse'
 
@@ -578,7 +585,9 @@ export const register: Register = (on, options) => {
     pinned = options.ttl === '5m' || options.ttl === '1h'
     observed = undefined
     setting = await readSetting($)
-    account = accountOf((await $.session.usage().catch(() => undefined))?.rateLimits ?? [])
+    const limits = (await $.session.usage().catch(() => undefined))?.rateLimits ?? []
+    account = accountOf(limits)
+    fiveHour = limits.find(x => x.kind === 'five_hour')
     const choice = decideTtl(options.ttl, env, setting, account)
     baseTtl = choice.ttl
     ttl = baseTtl
@@ -595,8 +604,8 @@ export const register: Register = (on, options) => {
       .catch(err => $.ui.log(`prompt-cache-control: /${COMMAND} not registered: ${err}`))
     $.ui.log(`prompt-cache-control loaded: ${ttl} cache (${ttlSource}), /${COMMAND} opens the table`, { to: 'debug' })
 
-    // a reload with status turned off leaves the previous load's entry behind
-    if (!showStatus) $.ui.status(undefined)
+    // the cache's part waits for the first request; this also clears what a previous load left
+    $.ui.status(showLimit ? fmtLimit(fiveHour, Date.now()) : undefined)
     spentUsd = 0
     winResetsAt = undefined
     winBase = 0
@@ -618,10 +627,10 @@ export const register: Register = (on, options) => {
       const now = Date.now()
       const { last, advice, left } = current(policy, now)
       // the band counts in minutes from 10 minutes up; the open pane counts seconds, so it redraws each one
-      const key = `${advice.kind}|${advice.text}|${left > 0 ? (isPaneOpen ? fmtClock(left) : fmtCountdown(left)) : ''}|${keepwarmStatus(now)?.text ?? ''}|${coldStatus(now) ?? ''}`
+      const key = `${advice.kind}|${advice.text}|${left > 0 ? (isPaneOpen ? fmtClock(left) : fmtCountdown(left)) : ''}|${keepwarmStatus(now)?.text ?? ''}|${coldStatus(now) ?? ''}|${showLimit ? fmtLimit(fiveHour, now) ?? '' : ''}`
       if (key !== lastKey) {
         lastKey = key
-        if (showStatus) $.ui.status(shortLine(policy, now))
+        if (showStatus || showLimit) $.ui.status(statusText(now))
         $.ui.invalidate('ui.render')
       }
       if (wantToast && last && left > 0 && promptTokens(last) >= TOAST_MIN_TOKENS) {
@@ -660,6 +669,14 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // the plan windows moved: the 5-hour one goes under the prompt
+  on('session.measure', async ($, e, next) => {
+    const w = e.rateLimits.find(x => x.kind === 'five_hour')
+    if (w) fiveHour = w
+    if (showLimit) $.ui.status(statusText(Date.now()))
+    return next(e)
+  })
+
   // each main-loop request: what the cache did with it
   on('turn.step', async function* ($, e, next) {
     if (e.agentId) return yield* next(e)
@@ -695,7 +712,7 @@ export const register: Register = (on, options) => {
         }
       }
       lastKey = ''
-      if (showStatus) $.ui.status(shortLine(policy, Date.now()))
+      if (showStatus || showLimit) $.ui.status(statusText(Date.now()))
       $.ui.invalidate('ui.render')
     }
     return r

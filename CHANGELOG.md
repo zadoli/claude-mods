@@ -4,6 +4,9 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.5.0 — 2026-10-08
+- The 5-hour plan window under the prompt: `5h 42% · reset 2h13m`, after the cache entry when `status` is on. New `limit` option, on by default; shown only on a Claude subscription.
+
 ### 0.4.2 — 2026-10-08
 - The open details pane counts seconds again: since 0.4.1 it redrew only once a minute above 10 minutes.
 - The band's keepwarm segment counts the pings in the window (`· 3 pings`) instead of the last ping's tokens and price, counted from the saved requests so it survives a restart; the details pane still shows the tokens and price.

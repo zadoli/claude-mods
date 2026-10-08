@@ -205,6 +205,18 @@ export function fmtCountdown(ms: number): string {
   return h > 0 ? `${h}h${String(m).padStart(2, '0')}m` : `${m}m`
 }
 
+/** the 5-hour plan window under the prompt: `5h 42% · reset 2h13m`; undefined without a reading or once it has reset */
+export function fmtLimit(w: { percentUsed: number; resetsAt?: string } | undefined, now: number): string | undefined {
+  if (!w) return undefined
+  const at = w.resetsAt ? Date.parse(w.resetsAt) : NaN
+  if (Number.isNaN(at)) return `5h ${w.percentUsed}%`
+  if (at <= now) return undefined
+  const total = Math.ceil((at - now) / 60_000)
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  return `5h ${w.percentUsed}% · reset ${h > 0 ? `${h}h${String(m).padStart(2, '0')}m` : `${m}m`}`
+}
+
 export function bar(ratio: number, width: number): string {
   const filled = Math.round(Math.min(1, Math.max(0, ratio)) * width)
   return '█'.repeat(filled) + '░'.repeat(width - filled)
