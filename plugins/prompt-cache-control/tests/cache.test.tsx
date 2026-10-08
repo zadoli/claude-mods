@@ -201,6 +201,16 @@ async function step($: Engine, over: { turnId?: string; index?: number; agentId?
   }
 }
 
+/** session s1 with a store held in a Map, so a second session.start sees what the first saved */
+function memStore(on: On, store = new Map<string, unknown>()) {
+  on('session.id', () => ({ value: 's1' }) as never)
+  on('store.get', ($, e) => ({ value: store.get((e as { key: string }).key) }) as never)
+  on('store.set', ($, e) => (store.set((e as { key: string }).key, (e as { value: unknown }).value), { value: undefined }) as never)
+  on('store.delete', ($, e) => (store.delete((e as { key: string }).key), { value: undefined }) as never)
+  on('store.keys', () => ({ value: [...store.keys()] }) as never)
+  return store
+}
+
 const BAND = { hasSurvey: false } as never
 const band = ($: Engine) => $.ui.mount({ plugin: 'prompt-cache-control', surface: 'terminal', component: 'AbovePrompt', props: BAND })
 
@@ -225,18 +235,30 @@ describe('the band', () => {
   test('a restart under the same session keeps the last request, not "waiting for the first request"', async ($, on) => {
     const calls: Calls = { status: [], logs: [] }
     fakeEngine(on, {}, calls)
-    on('session.id', () => ({ value: 's1' }) as never)
-    const store = new Map<string, unknown>()
-    on('store.get', ($, e) => ({ value: store.get((e as { key: string }).key) }) as never)
-    on('store.set', ($, e) => (store.set((e as { key: string }).key, (e as { value: unknown }).value), { value: undefined }) as never)
-    on('store.delete', ($, e) => (store.delete((e as { key: string }).key), { value: undefined }) as never)
-    on('store.keys', () => ({ value: [...store.keys()] }) as never)
+    memStore(on)
     await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
     await step($)
     await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
     const ui = await band($)
     expect(await ui.find({ type: 'Text', text: /98\.4%/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /waiting for the first request/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('the keepwarm segment counts the pings in the window from the saved samples', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    on('clock.after', () => ({ value: { cancel: () => {} } }) as never)
+    const now = Date.now()
+    const req = (turnId: string, startedAt: number) => ({ turnId, index: 0, model: 'claude-sonnet-5-5', startedAt, read: 80_000, write: 100, fresh: 300, output: 5 })
+    memStore(on, new Map<string, unknown>([
+      ['keepwarm.deadline:s1', now + 5 * 3600_000],
+      // a ping from before this window, then a turn and two pings in it
+      ['samples:s1', { at: now, samples: [req('keepwarm-1', now - 3 * 3600_000), req('t1', now - 30 * 60_000), req('keepwarm-2', now - 20 * 60_000), req('keepwarm-3', now - 60_000)] }],
+    ]))
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    const ui = await band($)
+    expect(await ui.find({ type: 'Text', text: /· 2 pings$/ })).toBeDefined()
     await ui.unmount()
   })
 

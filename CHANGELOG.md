@@ -6,7 +6,7 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ### 0.4.2 — 2026-10-08
 - The open details pane counts seconds again: since 0.4.1 it redrew only once a minute above 10 minutes.
-- The band's keepwarm segment counts the pings in the window (`· 3 pings`) instead of the last ping's tokens and price; the details pane still shows those.
+- The band's keepwarm segment counts the pings in the window (`· 3 pings`) instead of the last ping's tokens and price, counted from the saved requests so it survives a restart; the details pane still shows the tokens and price.
 
 ### 0.4.1 — 2026-10-08
 - The band's countdown shows whole minutes (`35m`) from 10 minutes up and seconds only below, so it no longer ticks every second. The status line follows; the details pane stays to the second.
