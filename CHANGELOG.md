@@ -4,6 +4,9 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.6.0 — 2026-10-08
+- New `autoKeepwarm` option, off by default: a message opens a 6-hour keepwarm window whenever none is running. `/keepwarm off` or the pane's stop keeps it off for the session until it is started by hand.
+
 ### 0.5.0 — 2026-10-08
 - The 5-hour plan window under the prompt: `5h 42% · reset 2h13m`, after the cache entry when `status` is on. New `limit` option, on by default; shown only on a Claude subscription.
 

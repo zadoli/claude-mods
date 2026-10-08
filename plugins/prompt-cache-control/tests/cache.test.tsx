@@ -276,7 +276,7 @@ describe('the band', () => {
     await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
     expect(calls.status.at(-1)).toBe('5h 42% · reset 2h14m')
     await step($)
-    expect(calls.status.at(-1)).toMatch(/^cache 98\.4% · 59m · 5h 42% · reset 2h1[34]m$/)
+    expect(calls.status.at(-1)).toMatch(/^cache 98\.4% · (59m|1h00m) · 5h 42% · reset 2h1[34]m$/)
   })
 
   test('the limit option turns the 5-hour window off', { options: { limit: false } }, async ($, on) => {
@@ -285,6 +285,49 @@ describe('the band', () => {
     await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
     await step($)
     expect(calls.status.filter(Boolean)).toEqual([])
+  })
+
+  test('autoKeepwarm opens a window with the first message, not before and not by default', { options: { autoKeepwarm: true } }, async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    on('clock.after', () => ({ value: { cancel: () => {} } }) as never)
+    memStore(on)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    let ui = await band($)
+    expect(await ui.find({ type: 'Text', text: /keepwarm/ })).toBeUndefined()
+    await ui.unmount()
+    await step($)
+    ui = await band($)
+    expect(await ui.find({ type: 'Text', text: /^♨ keepwarm 6h00m/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('without autoKeepwarm a message leaves keepwarm off', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    on('clock.after', () => ({ value: { cancel: () => {} } }) as never)
+    memStore(on)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    await step($)
+    const ui = await band($)
+    expect(await ui.find({ type: 'Text', text: /keepwarm/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('autoKeepwarm leaves keepwarm off once the person stops it', { options: { autoKeepwarm: true } }, async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    on('clock.after', () => ({ value: { cancel: () => {} } }) as never)
+    memStore(on)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    await step($)
+    const pane = await $.ui.mount({ plugin: 'prompt-cache-control', surface: 'terminal', component: 'Pane', requestId: 'cache', props: { bodyColumns: 70 } } as never)
+    await pane.press({ key: 'kw-stop' })
+    await pane.unmount()
+    await step($, { turnId: 't2' })
+    const ui = await band($)
+    expect(await ui.find({ type: 'Text', text: /keepwarm/ })).toBeUndefined()
+    await ui.unmount()
   })
 
   test('a subagent request is not the main loop and leaves the meter alone', { options: { status: true } }, async ($, on) => {

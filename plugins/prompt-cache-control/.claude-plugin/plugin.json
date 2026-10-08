@@ -1,6 +1,6 @@
 {
   "name": "prompt-cache-control",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Prompt-cache meter above the Claude Code prompt: how many tokens each request read from, wrote to and sent past the cache, a live countdown to the cache's expiry, and what to do about it (keep going, compact or clear). The TTL follows Claude Code's own rules for your account (1 hour on a Claude subscription, 5 minutes on an API key, cloud provider or usage credits, plus the TTL variables and setting) and corrects itself from request timing. /cache opens a per-turn table; /keepwarm pings the cache after idle stretches so it never lapses (ported from cache-tax).",
   "author": {
     "name": "claude-code-templates",
@@ -62,6 +62,12 @@
       "title": "5-hour window under the prompt",
       "description": "Show how much of the 5-hour plan window is used and when it resets (5h 42% · reset 2h13m) under the prompt; only on a Claude subscription",
       "default": true
+    },
+    "autoKeepwarm": {
+      "type": "boolean",
+      "title": "Start keepwarm with each message",
+      "description": "Open a 6-hour keepwarm window after a message whenever none is running, so the cache is pinged through idle stretches; /keepwarm off (or the pane's stop) keeps it off until you start it again. Pings cost a cache read each",
+      "default": false
     },
     "toast": {
       "type": "boolean",

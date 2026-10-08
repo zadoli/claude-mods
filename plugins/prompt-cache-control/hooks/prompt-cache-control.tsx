@@ -201,6 +201,8 @@ let deadline = 0
 let windowStart = 0 // when the current window was armed, for the pane's bar
 let every = 0 // 0: the default for the TTL in force
 let always = false
+// ponytail: in memory, a plugin reload or a restarted process lets autoKeepwarm start it again
+let userOff = false // /keepwarm off or the pane's stop: autoKeepwarm leaves it off until it is started by hand
 let compacted = false
 let stopped: string | null = null
 let lastPing: Ping | null = null
@@ -276,6 +278,7 @@ async function keepwarmEnd($: EngineInterface, reason: string) {
   if (reason === 'clear') {
     await stop($, null)
     lastPing = null
+    userOff = false
     misses = []
     ackedAt = 0
     coldWritePending = false
@@ -290,6 +293,7 @@ const disarm = () => {
 }
 
 async function stop($: EngineInterface, why: string | null, forgetAlways = false) {
+  if (forgetAlways) userOff = true
   deadline = 0
   every = 0
   stopped = why
@@ -369,6 +373,7 @@ async function startWindow($: EngineInterface, windowMs: number, everyMs: number
   else await $.store.delete(keyOf(KEY_EVERY))
   windowStart = Date.now()
   deadline = windowStart + windowMs
+  userOff = false
   stopped = null
   await $.store.set(keyOf(KEY_DEADLINE), deadline)
   await arm($)
@@ -561,6 +566,7 @@ export const register: Register = (on, options) => {
   const showBreakdown = options.breakdown !== false
   const showStatus = options.status === true
   const showLimit = options.limit !== false
+  const autoWarm = options.autoKeepwarm === true
   /** the entry under the prompt: the cache's short line and/or the 5-hour window */
   const statusText = (now: number) =>
     [showStatus ? shortLine(policy, now) : undefined, showLimit ? fmtLimit(fiveHour, now) : undefined].filter(Boolean).join(' · ') || undefined
@@ -693,6 +699,10 @@ export const register: Register = (on, options) => {
         fresh: r.usage.input_tokens,
         output: r.usage.output_tokens,
       })
+      // autoKeepwarm: a message opens a window when none is running, unless the person turned it off
+      if (autoWarm && !userOff && !(deadline > Date.now())) {
+        await startWindow($, DEFAULT_WINDOW_MS, every).catch(err => $.ui.log(`prompt-cache-control: autoKeepwarm not started: ${err}`, { to: 'debug' }))
+      }
       if (!pinned) {
         // the account can change under a session: a subscription running out of plan usage moves to usage credits
         account = accountOf((await $.session.usage().catch(() => undefined))?.rateLimits ?? [])
