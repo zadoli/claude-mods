@@ -25,7 +25,7 @@ Update later with `claude plugin marketplace update zadoli-mods`.
 
 1. Bump `version` in `plugins/<name>/.claude-plugin/plugin.json`, so an update shows up as a new version.
 2. Add the entry to `CHANGELOG.md`.
-3. Commit, tag `<name>-v<version>`, and push with `git push --follow-tags`.
+3. Commit, tag with `git tag -a <name>-v<version> -m "<name> <version>"` (annotated: `--follow-tags` skips lightweight tags), and push with `git push --follow-tags`.
 4. On each machine: `claude plugin marketplace update zadoli-mods`, then `/reload-plugins`.
 
 ## Options
