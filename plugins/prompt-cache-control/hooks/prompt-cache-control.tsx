@@ -398,7 +398,7 @@ function writeRate(model: string): number | null {
 }
 
 const AUTO_WARM_MS = 3 * 60 * 60 * 1000
-type Miss = { at: number; tokens: number; usd: number | null }
+type Miss = { at: number; turnId: string; tokens: number; usd: number | null }
 /** this session's cold writes */
 let misses: Miss[] = []
 /** the guard let a message to a cold cache through: its turn pays a cold write */
@@ -936,7 +936,9 @@ export const register: Register = (on, options) => {
             const usd = turnUsd(r.turnId)
             return (
               <Box key={`t:${r.turnId}`} flexDirection="row" columnGap={1}>
-                {cell(`c:turn:${r.turnId}`, 4, r.turnId.startsWith('keepwarm-') ? '♨' : String(n))}
+                {r.turnId.startsWith('keepwarm-') ? cell(`c:turn:${r.turnId}`, 4, '♨')
+                  : misses.some(m => m.turnId === r.turnId) ? cell(`c:turn:${r.turnId}`, 4, `❄${n}`, 'cyan', true)
+                  : cell(`c:turn:${r.turnId}`, 4, String(n))}
                 {cell(`c:steps:${r.turnId}`, 5, String(r.steps))}
                 {cell(`c:read:${r.turnId}`, 6, fmtTokens(r.read), 'green')}
                 {cell(`c:wrote:${r.turnId}`, 6, fmtTokens(r.write), 'yellow')}
@@ -1001,7 +1003,7 @@ export const register: Register = (on, options) => {
     if (paid) {
       const rate = writeRate(paid.model)
       const usd = rate == null ? null : (paid.write * rate) / 1e6
-      misses.push({ at: paid.startedAt, tokens: paid.write, usd })
+      misses.push({ at: paid.startedAt, turnId: paid.turnId, tokens: paid.write, usd })
       // a cold write was just paid: keep it from being paid again today
       if (deadline < Date.now() + AUTO_WARM_MS) {
         await startWindow($, AUTO_WARM_MS, every)
