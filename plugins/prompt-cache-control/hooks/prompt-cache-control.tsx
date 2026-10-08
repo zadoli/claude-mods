@@ -613,7 +613,8 @@ export const register: Register = (on, options) => {
     timer = $.clock.every(1000, () => {
       const now = Date.now()
       const { last, advice, left } = current(policy, now)
-      const key = `${advice.kind}|${advice.text}|${left > 0 ? fmtCountdown(left) : ''}|${keepwarmStatus(now)?.text ?? ''}|${coldStatus(now) ?? ''}`
+      // the band counts in minutes from 10 minutes up; the open pane counts seconds, so it redraws each one
+      const key = `${advice.kind}|${advice.text}|${left > 0 ? (isPaneOpen ? fmtClock(left) : fmtCountdown(left)) : ''}|${keepwarmStatus(now)?.text ?? ''}|${coldStatus(now) ?? ''}`
       if (key !== lastKey) {
         lastKey = key
         if (showStatus) $.ui.status(shortLine(policy, now))

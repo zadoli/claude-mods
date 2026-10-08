@@ -4,6 +4,9 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.4.2 — 2026-10-08
+- The open details pane counts seconds again: since 0.4.1 it redrew only once a minute above 10 minutes.
+
 ### 0.4.1 — 2026-10-08
 - The band's countdown shows whole minutes (`35m`) from 10 minutes up and seconds only below, so it no longer ticks every second. The status line follows; the details pane stays to the second.
 
