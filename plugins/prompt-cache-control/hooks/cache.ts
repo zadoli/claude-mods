@@ -196,6 +196,15 @@ export function fmtClock(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
 }
 
+/** the band's countdown: whole minutes (rounded down) from 10 minutes up, so it does not tick; m:ss below */
+export function fmtCountdown(ms: number): string {
+  if (ms < 10 * 60_000) return fmtClock(ms)
+  const total = Math.floor(ms / 60_000)
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  return h > 0 ? `${h}h${String(m).padStart(2, '0')}m` : `${m}m`
+}
+
 export function bar(ratio: number, width: number): string {
   const filled = Math.round(Math.min(1, Math.max(0, ratio)) * width)
   return '█'.repeat(filled) + '░'.repeat(width - filled)

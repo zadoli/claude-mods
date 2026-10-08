@@ -11,6 +11,7 @@ import {
   bar,
   byTurn,
   fmtClock,
+  fmtCountdown,
   fmtTokens,
   hitRatio,
   isCachingDisabled,
@@ -75,6 +76,10 @@ describe('the countdown counts from the start of the request', () => {
     expect(fmtClock(3_500_000)).toBe('58:20')
     expect(fmtClock(3_600_000)).toBe('1:00:00')
     expect(fmtClock(1)).toBe('0:01')
+    expect(fmtCountdown(599_000)).toBe('9:59')
+    expect(fmtCountdown(600_000)).toBe('10m')
+    expect(fmtCountdown(2_159_000)).toBe('35m')
+    expect(fmtCountdown(3_900_000)).toBe('1h05m')
     expect(fmtTokens(950)).toBe('950')
     expect(fmtTokens(84_200)).toBe('84.2k')
     expect(fmtTokens(182_000)).toBe('182k')

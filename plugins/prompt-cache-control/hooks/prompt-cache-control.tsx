@@ -48,6 +48,7 @@ import {
   bar,
   byTurn,
   fmtClock,
+  fmtCountdown,
   fmtTokens,
   hitRatio,
   isCachingDisabled,
@@ -122,7 +123,7 @@ async function openPane($: EngineInterface) {
 function shortLine(policy: Policy, now: number): string {
   const { last, advice, left } = current(policy, now)
   if (!last || advice.kind === 'off') return `cache: ${advice.text}`
-  const clock = left > 0 ? ` · ${fmtClock(left)}` : ''
+  const clock = left > 0 ? ` · ${fmtCountdown(left)}` : ''
   return `cache ${pct1(hitRatio(last))}${clock}`
 }
 
@@ -612,7 +613,7 @@ export const register: Register = (on, options) => {
     timer = $.clock.every(1000, () => {
       const now = Date.now()
       const { last, advice, left } = current(policy, now)
-      const key = `${advice.kind}|${advice.text}|${left > 0 ? fmtClock(left) : ''}|${keepwarmStatus(now)?.text ?? ''}|${coldStatus(now) ?? ''}`
+      const key = `${advice.kind}|${advice.text}|${left > 0 ? fmtCountdown(left) : ''}|${keepwarmStatus(now)?.text ?? ''}|${coldStatus(now) ?? ''}`
       if (key !== lastKey) {
         lastKey = key
         if (showStatus) $.ui.status(shortLine(policy, now))
@@ -809,7 +810,7 @@ export const register: Register = (on, options) => {
           <Text dimColor>{`${fmtTokens(promptTokens(last))} tok`}</Text>
         )}
         {advice.kind !== 'uncached' && advice.kind !== 'off' && (
-          <Text bold color={left > 0 ? lifeColor(left, ttl, policy.warnMs) : 'red'}>{left > 0 ? `⏱ ${fmtClock(left)}` : '⏱ 0:00'}</Text>
+          <Text bold color={left > 0 ? lifeColor(left, ttl, policy.warnMs) : 'red'}>{left > 0 ? `⏱ ${fmtCountdown(left)}` : '⏱ 0:00'}</Text>
         )}
         {kw && <Text color={kw.stopped ? 'red' : 'magenta'}>{kw.text}</Text>}
         {cold && <Text color="cyan">{cold}</Text>}

@@ -4,6 +4,9 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.4.1 — 2026-10-08
+- The band's countdown shows whole minutes (`35m`) from 10 minutes up and seconds only below, so it no longer ticks every second. The status line follows; the details pane stays to the second.
+
 ### 0.4.0 — 2026-10-08
 - Saved requests survive a process restart under an idle session: the band no longer drops back to "waiting for the first request", and keepwarm keeps its last turn.
 - TURNS: cold-write turns marked with ❄, a cost column and a 5h% column.
