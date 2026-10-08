@@ -21,6 +21,13 @@ Then `/reload-plugins` in a running session (or start a new one). The repo is pr
 
 Update later with `claude plugin marketplace update zadoli-mods`.
 
+## Releasing
+
+1. Bump `version` in `plugins/<name>/.claude-plugin/plugin.json`, so an update shows up as a new version.
+2. Add the entry to `CHANGELOG.md`.
+3. Commit, tag `<name>-v<version>`, and push with `git push --follow-tags`.
+4. On each machine: `claude plugin marketplace update zadoli-mods`, then `/reload-plugins`.
+
 ## Options
 
 In `~/.claude/settings.json` (the key is `<plugin>@zadoli-mods` when installed from this marketplace):

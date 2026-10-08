@@ -1,6 +1,6 @@
 {
   "name": "context-band",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A row above the prompt with the working directory, its git branch and the skill loaded since your last message.",
   "author": {
     "name": "Zádori Olivér",
