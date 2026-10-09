@@ -1,6 +1,6 @@
 {
   "name": "prompt-cache-control",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Prompt-cache meter above the Claude Code prompt: how many tokens each request read from, wrote to and sent past the cache, a live countdown to the cache's expiry, and what to do about it (keep going, compact or clear). The TTL follows Claude Code's own rules for your account (1 hour on a Claude subscription, 5 minutes on an API key, cloud provider or usage credits, plus the TTL variables and setting) and corrects itself from request timing. /cache opens a per-turn table; /keepwarm pings the cache after idle stretches so it never lapses (ported from cache-tax).",
   "author": {
     "name": "claude-code-templates",

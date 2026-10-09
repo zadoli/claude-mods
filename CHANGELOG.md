@@ -4,6 +4,9 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.7.0 — 2026-10-09
+- The `/cache` pane and `/cache text` show how long the session has run (`session`), counted from its first launch when resumed and restarted by `/clear`.
+
 ### 0.6.0 — 2026-10-08
 - New `autoKeepwarm` option, off by default: a message opens a 6-hour keepwarm window whenever none is running. `/keepwarm off` or the pane's stop keeps it off for the session until it is started by hand.
 

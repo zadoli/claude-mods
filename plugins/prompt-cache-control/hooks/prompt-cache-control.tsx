@@ -92,6 +92,8 @@ let lastKey = ''
 let toastedFor = 0
 let toastLevel = Infinity
 let isPaneOpen = false
+/** when the session began (its first launch if resumed, /clear restarts it); 0 until known */
+let sessionStartedAt = 0
 
 type Policy = { warnMs: number; compactAtTokens: number }
 
@@ -591,7 +593,9 @@ export const register: Register = (on, options) => {
     pinned = options.ttl === '5m' || options.ttl === '1h'
     observed = undefined
     setting = await readSetting($)
-    const limits = (await $.session.usage().catch(() => undefined))?.rateLimits ?? []
+    const usage = await $.session.usage().catch(() => undefined)
+    sessionStartedAt = usage?.startedAt ?? 0
+    const limits = usage?.rateLimits ?? []
     account = accountOf(limits)
     fiveHour = limits.find(x => x.kind === 'five_hour')
     const choice = decideTtl(options.ttl, env, setting, account)
@@ -633,7 +637,7 @@ export const register: Register = (on, options) => {
       const now = Date.now()
       const { last, advice, left } = current(policy, now)
       // the band counts in minutes from 10 minutes up; the open pane counts seconds, so it redraws each one
-      const key = `${advice.kind}|${advice.text}|${left > 0 ? (isPaneOpen ? fmtClock(left) : fmtCountdown(left)) : ''}|${keepwarmStatus(now)?.text ?? ''}|${coldStatus(now) ?? ''}|${showLimit ? fmtLimit(fiveHour, now) ?? '' : ''}`
+      const key = `${advice.kind}|${advice.text}|${left > 0 ? (isPaneOpen ? fmtClock(left) : fmtCountdown(left)) : ''}|${keepwarmStatus(now)?.text ?? ''}|${coldStatus(now) ?? ''}|${showLimit ? fmtLimit(fiveHour, now) ?? '' : ''}|${isPaneOpen && sessionStartedAt ? fmtClock(now - sessionStartedAt) : ''}`
       if (key !== lastKey) {
         lastKey = key
         if (showStatus || showLimit) $.ui.status(statusText(now))
@@ -742,6 +746,7 @@ export const register: Register = (on, options) => {
     const row = (label: string, value: string) => `${label.padEnd(LABEL_W)}${value}`
     // the engine prefixes the plugin's name to the first line
     const lines = [advice.text]
+    if (sessionStartedAt) lines.push(row('session', fmtClock(now - sessionStartedAt)))
     if (counting) lines.push(row('expires in', left > 0 ? fmtClock(left) : '0:00'))
     if (last) {
       lines.push(row('last request', `${pct1(hitRatio(last))} hit`))
@@ -927,6 +932,7 @@ export const register: Register = (on, options) => {
         </Box>
 
         {section('cache', 'CACHE', [
+          sessionStartedAt ? row('c:session', 'session', <Text key="v" bold>{sp(fmtClock(now - sessionStartedAt))}</Text>) : null,
           row('c:ttl', 'lifetime', <Text key="v" bold>{sp(ttl)}</Text>, <Text key="s" dimColor>{sp(`(${ttlSource})`)}</Text>),
           row('c:left', 'expires in',
             counting ? solid('life', [[lifeFilled, clockColor], [barW - lifeFilled, 'gray']]) : null,
