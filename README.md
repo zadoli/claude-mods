@@ -4,7 +4,7 @@ Zádori Olivér's Claude Code mods (function-hook plugins), as the `zadoli-mods`
 
 | Mod | What it does |
 | --- | --- |
-| `prompt-cache-control` | Cache meter above the prompt (hit rate, countdown, keepwarm, cold price) with a `details` button that opens a pane; `/keepwarm` pings the cache after idle stretches; a message to a cold cache of 50k+ tokens is stopped once with its price. |
+| `prompt-cache-control` | Cache meter above the prompt (hit rate, countdown, keepwarm, cold price) with a `details` button that opens a pane; `/keepwarm` pings the cache after idle stretches; a message to a cold cache of `compactAtTokens` (100k)+ tokens is stopped once with its price. |
 | `context-band` | Desktop app only: a row above the prompt with the working directory, git branch and the skill loaded since your last message. |
 
 Needs Claude Code 2.1.287 or newer.

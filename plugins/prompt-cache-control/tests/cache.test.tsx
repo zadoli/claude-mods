@@ -22,6 +22,7 @@ import {
   calibRate,
   windowSpend,
   guardVerdict,
+  idleCompactState,
   isColdWrite,
 } from '../hooks/cache.ts'
 import type { Policy, Sample } from '../hooks/cache.ts'
@@ -491,13 +492,28 @@ describe('which lifetime Claude Code asks for', () => {
 
 describe('the cold-cache guard', () => {
   test('refuse drops the first message to a big cold cache and lets the resend through; warn only logs', () => {
-    const big = { coldAt: T0, tokens: 81_000, startedAt: T0 - 1 }
+    const big = { coldAt: T0, tokens: 120_000, minTokens: policy.compactAtTokens, startedAt: T0 - 1 }
     expect(guardVerdict({ ...big, mode: 'refuse', ackedAt: 0 })).toBe('drop')
     expect(guardVerdict({ ...big, mode: 'refuse', ackedAt: T0 - 1 })).toBe('resend')
     expect(guardVerdict({ ...big, mode: 'warn', ackedAt: 0 })).toBe('warn')
     expect(guardVerdict({ ...big, mode: 'off', ackedAt: 0 })).toBe('pass')
     expect(guardVerdict({ ...big, coldAt: undefined, mode: 'refuse', ackedAt: 0 })).toBe('pass')
-    expect(guardVerdict({ ...big, tokens: 20_000, mode: 'refuse', ackedAt: 0 })).toBe('pass')
+    expect(guardVerdict({ ...big, tokens: 81_000, mode: 'refuse', ackedAt: 0 })).toBe('pass')
+  })
+})
+
+describe('idle compaction', () => {
+  test('on only when the flag says compact and nothing turns it off; the env var moves the minimum, floored at 100k', () => {
+    const base = { flagMode: 'compact', idleSetting: undefined, autoCompact: undefined, disableEnv: undefined, minEnv: undefined }
+    expect(idleCompactState(base)).toMatchObject({ on: true, minTokens: 200_000 })
+    expect(idleCompactState({ ...base, minEnv: '50000' }).minTokens).toBe(100_000)
+    expect(idleCompactState({ ...base, minEnv: '300000' }).minTokens).toBe(300_000)
+    expect(idleCompactState({ ...base, flagMode: 'off' }).on).toBe(false)
+    expect(idleCompactState({ ...base, flagMode: undefined }).text).toMatch(/unknown/)
+    expect(idleCompactState({ ...base, flagMode: 'log' }).on).toBe(false)
+    expect(idleCompactState({ ...base, idleSetting: false }).text).toMatch(/idleCompaction/)
+    expect(idleCompactState({ ...base, autoCompact: false }).on).toBe(false)
+    expect(idleCompactState({ ...base, disableEnv: '1' }).on).toBe(false)
   })
 })
 

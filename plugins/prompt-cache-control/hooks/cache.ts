@@ -176,7 +176,7 @@ export function advise(last: Sample | undefined, prev: Sample | undefined, polic
     return { kind: 'soon', text: 'expires soon: any message refreshes it for free' }
   }
   if (miss) return { kind: 'miss', text: `cache missed: ${miss}` }
-  return { kind: 'warm', text: 'warm: keep going' }
+  return { kind: 'warm', text: 'warm, keep going' }
 }
 
 export function fmtTokens(n: number): string {
@@ -337,13 +337,34 @@ export type GuardMode = 'refuse' | 'warn' | 'off'
 
 /**
  * What to do with a message (cold-cache guard, from cache-tax): `coldAt` is when
- * the last request's cache lapsed (undefined while warm), `startedAt` that
+ * the last request's cache lapsed (undefined while warm), `minTokens` the prompt size below which a
+ * cold write is cheap enough to just send (compactAtTokens, as in `advise`), `startedAt` that
  * request's start, `ackedAt` the request a previous refusal was for.
  */
-export function guardVerdict(g: { mode: GuardMode; coldAt: number | undefined; tokens: number; startedAt: number; ackedAt: number }): 'pass' | 'warn' | 'drop' | 'resend' {
-  if (g.mode === 'off' || g.coldAt === undefined || g.tokens < 50_000) return 'pass'
+export function guardVerdict(g: { mode: GuardMode; coldAt: number | undefined; tokens: number; minTokens: number; startedAt: number; ackedAt: number }): 'pass' | 'warn' | 'drop' | 'resend' {
+  if (g.mode === 'off' || g.coldAt === undefined || g.tokens < g.minTokens) return 'pass'
   if (g.mode === 'warn') return 'warn'
   return g.ackedAt === g.startedAt ? 'resend' : 'drop'
+}
+
+/**
+ * Claude Code's idle compaction (2.1.299): about 54 minutes into a 1h cache it
+ * compacts a conversation of `minTokens` or more. A remote flag
+ * (`tengu_sunny_locket.mode` in ~/.claude.json's cachedGrowthBookFeatures)
+ * turns it on; `idleCompaction: false`, `autoCompactEnabled: false` or
+ * DISABLE_AUTO_COMPACT turn it off. Our keepwarm pings do not reset its timer
+ * (they are auxiliary requests), so with it on a ping at 50m is paid for nothing.
+ */
+export function idleCompactState(i: { flagMode: unknown; idleSetting: unknown; autoCompact: unknown; disableEnv: string | undefined; minEnv: string | undefined }): { on: boolean; text: string; minTokens: number } {
+  const n = Number(i.minEnv)
+  const minTokens = Number.isFinite(n) && n > 0 ? Math.max(100_000, n) : 200_000
+  const off = (text: string) => ({ on: false, text, minTokens })
+  if (i.flagMode !== 'compact' && i.flagMode !== 'log') return off(i.flagMode === undefined ? 'unknown (no flag cached)' : 'off (not rolled out)')
+  if (i.idleSetting === false) return off('off (idleCompaction: false)')
+  if (i.autoCompact === false) return off('off (autoCompactEnabled: false)')
+  if (isOn(i.disableEnv)) return off('off (DISABLE_AUTO_COMPACT)')
+  if (i.flagMode === 'log') return off('dry run (flag mode log)')
+  return { on: true, text: `ON at ${fmtTokens(minTokens)}+ tokens on a 1h cache`, minTokens }
 }
 
 /** a request re-wrote the prefix: the guard let a cold send through, or it wrote half a 20k+ previous prompt or more (from cache-tax) */

@@ -4,6 +4,11 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.8.0 — 2026-10-14
+- The cold-cache guard stops a message only at `compactAtTokens` (100k by default) or more, the size where the expired hint stops saying "just keep going", instead of a fixed 50k.
+- The pane and `/cache text` show Claude Code's idle compaction (`idle compact`), read at session start from its cached remote flag and the settings that turn it off. When it is on, a notice says keepwarm's 50m ping is wasted on conversations it compacts, since keepwarm pings do not reset its timer.
+- The warm advice reads `warm, keep going`.
+
 ### 0.7.0 — 2026-10-09
 - The `/cache` pane and `/cache text` show how long the session has run (`session`), counted from its first launch when resumed and restarted by `/clear`.
 

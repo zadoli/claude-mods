@@ -41,6 +41,7 @@ import {
   windowSpend,
   type Spend,
   guardVerdict,
+  idleCompactState,
   isColdWrite,
   advise,
   ttlMs,
@@ -147,6 +148,29 @@ async function readSetting($: EngineInterface): Promise<unknown> {
     }
   }
   return undefined
+}
+
+let idle: ReturnType<typeof idleCompactState> | undefined
+/** Claude Code's idle compaction, from its cached remote flag and the settings that turn it off */
+async function readIdleCompact($: EngineInterface) {
+  const none = () => undefined
+  const home = (await $.env.get('HOME').catch(none)) ?? (await $.env.get('USERPROFILE').catch(none))
+  const json = async (file: string) => JSON.parse(await $.fs.read(file).catch(() => '{}'))
+  const cfg = home ? await json(`${home}/.claude.json`).catch(() => ({})) : {}
+  const cwd = await $.session.cwd().catch(none)
+  let idleSetting: unknown
+  for (const file of [cwd && `${cwd}/.claude/settings.local.json`, cwd && `${cwd}/.claude/settings.json`, home && `${home}/.claude/settings.json`]) {
+    if (!file) continue
+    const v = (await json(file).catch(() => ({}))).idleCompaction
+    if (typeof v === 'boolean') { idleSetting = v; break }
+  }
+  return idleCompactState({
+    flagMode: cfg.cachedGrowthBookFeatures?.tengu_sunny_locket?.mode,
+    idleSetting,
+    autoCompact: cfg.autoCompactEnabled,
+    disableEnv: await $.env.get('DISABLE_AUTO_COMPACT').catch(none),
+    minEnv: await $.env.get('CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS').catch(none),
+  })
 }
 
 
@@ -593,6 +617,8 @@ export const register: Register = (on, options) => {
     pinned = options.ttl === '5m' || options.ttl === '1h'
     observed = undefined
     setting = await readSetting($)
+    idle = await readIdleCompact($).catch(() => undefined)
+    if (idle?.on) $.ui.log(`prompt-cache-control: Claude Code's idle compaction is ${idle.text}: it compacts ~54m into an idle stretch whatever keepwarm does, so keepwarm's 50m ping on such a conversation is wasted. "idleCompaction": false in settings.json turns it off.`)
     const usage = await $.session.usage().catch(() => undefined)
     sessionStartedAt = usage?.startedAt ?? 0
     const limits = usage?.rateLimits ?? []
@@ -760,6 +786,7 @@ export const register: Register = (on, options) => {
       lines.push(row('cold write', `${fmtUsd(cold)}${isColdNow ? ' · cold now: the next message pays it' : ''}` +
         (warm != null ? ` (warm turn ${fmtUsd(warm)})` : '')))
     }
+    if (idle) lines.push(row('idle compact', idle.text))
     lines.push(row('guard', guard === 'refuse' ? 'refuse once' : guard === 'warn' ? 'warn only' : 'off'))
     if (pctPerUsd !== undefined && cold != null && warm != null) {
       lines.push(row('5h window', `≈ ${(cold * pctPerUsd).toFixed(1)}% cold · ${(warm * pctPerUsd).toFixed(1)}% warm (experimental, ${sessionsText()})`))
@@ -960,6 +987,7 @@ export const register: Register = (on, options) => {
           kwi.lastPing ? row('k:last', 'last ping', <Text key="v" bold>{sp(`${fmtTokens(kwi.lastPing.read)} read · ${fmtUsd(kwi.lastPing.usd)}`)}</Text>) : null,
           breakEven !== undefined ? row('k:be', 'break-even', <Text key="v" bold>{sp(`${breakEven} pings`)}</Text>,
             <Text key="s" dimColor>{sp(`= one cold write, ~${fmtDuration(breakEven * kwi.every)} idle`)}</Text>) : null,
+          idle ? row('k:idle', 'idle compact', <Text key="v" bold color={idle.on ? 'red' : undefined}>{sp(idle.text)}</Text>) : null,
         ])}
 
         {section('cost', 'COST', [
@@ -969,7 +997,7 @@ export const register: Register = (on, options) => {
           last && warm != null && cold ? row('$:warm', 'warm turn', bar('warmbar', Math.max(warm / cold, 1 / barW), 'green'),
             <Text key="v" bold color="green">{sp(fmtUsd(warm))}</Text>) : null,
           row('$:guard', 'guard', <Text key="v" bold>{sp(guard === 'refuse' ? 'refuse once' : guard === 'warn' ? 'warn only' : 'off')}</Text>,
-            <Text key="s" dimColor>{sp('on a cold cache of 50k+ tokens')}</Text>),
+            <Text key="s" dimColor>{sp(`on a cold cache of ${fmtTokens(policy.compactAtTokens)}+ tokens`)}</Text>),
           pctPerUsd !== undefined && cold != null && warm != null
             ? row('$:plan', '5h window', <Text key="v" bold color="magenta">{sp(`≈ ${(cold * pctPerUsd).toFixed(1)}% cold · ${(warm * pctPerUsd).toFixed(1)}% warm`)}</Text>,
                 <Text key="s" dimColor>{sp(`🧪 ${pctPerUsd.toFixed(2)}% per $ · ${sessionsText()}`)}</Text>)
@@ -1024,7 +1052,7 @@ export const register: Register = (on, options) => {
     const now = Date.now()
     const last = samples[samples.length - 1]
     if (!last) return next(e)
-    const verdict = guardVerdict({ mode: guard, coldAt: coldSince(now), tokens: promptTokens(last), startedAt: last.startedAt, ackedAt })
+    const verdict = guardVerdict({ mode: guard, coldAt: coldSince(now), tokens: promptTokens(last), minTokens: policy.compactAtTokens, startedAt: last.startedAt, ackedAt })
     if (verdict === 'pass') return next(e)
     if (verdict === 'warn') {
       $.ui.log(`prompt-cache-control: ${guardText(now)} Sending anyway; keepwarm will hold the cache for ${fmtDuration(AUTO_WARM_MS)} once it lands.`)

@@ -7,7 +7,7 @@ down to the moment the cache lapses and tells you what to do about it: keep
 going, `/compact` or `/clear`.
 
 ```
-cache ██████████ 98% read 80k · wrote 1k · new 300 ⏱ 3:41 5m · warm: keep going
+cache ██████████ 98% read 80k · wrote 1k · new 300 ⏱ 3:41 5m · warm, keep going
 cache ░░░░░░░░░░  0% read 0 · wrote 52k · new 300 ⏱ 4:58 5m · cache missed: model changed (…)
 cache ██████████ 98% read 150k · wrote 1k · new 300 ⏱ 0:00 5m · expired: the next message rewrites 151k tokens. /compact first, or /clear if the task is done
 ```
