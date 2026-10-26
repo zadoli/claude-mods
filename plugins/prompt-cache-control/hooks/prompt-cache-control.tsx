@@ -181,6 +181,7 @@ const MIN_PING_MS = 60 * 1000
 const PING_PROMPT = 'Reply with the single word: warm'
 const KEY_DEADLINE = 'keepwarm.deadline'
 const KEY_EVERY = 'keepwarm.every'
+const KEY_START = 'keepwarm.start'
 const KEY_ALWAYS = 'keepwarm.always'
 
 // $ per million tokens, [cache read, 1h cache write, output], list prices September 2026 (from cache-tax).
@@ -236,16 +237,28 @@ let lastPing: Ping | null = null
 // ponytail: a restart keeps the last SAVED samples, so a longer run of pings than that counts short
 const pingsInWindow = () => samples.filter(x => x.turnId.startsWith('keepwarm-') && x.startedAt >= windowStart).length
 let pending: { cancel: () => void } | null = null
+let rearmedFor = 0 // the request whose early ping was already re-armed
 
 const period = () => every || defaultEvery(ttlMs(ttl))
 const lastAt = () => samples[samples.length - 1]?.startedAt ?? 0
 const isCold = (now: number) => lastAt() > 0 && now - lastAt() >= ttlMs(ttl)
 
+/** the cache went cold inside a running window without a ping: the ping's time, which the process slept through */
+function missedAt(now: number): number | undefined {
+  if (!deadline || !lastAt() || compacted || !isCold(now)) return undefined
+  const due = lastAt() + period()
+  return lastAt() + ttlMs(ttl) > windowStart && due < deadline ? due : undefined
+}
+
+const fmtTime = (at: number) => new Date(at).toTimeString().slice(0, 5)
+
 /** the band's segment, undefined when keepwarm is off */
 function keepwarmStatus(now: number): { text: string; stopped: boolean } | undefined {
   if (stopped) return { text: `keepwarm stopped: ${stopped}`, stopped: true }
   if (!deadline || now >= deadline) return undefined
+  const missed = missedAt(now)
   const next = !lastAt() || compacted ? 'waiting for a turn'
+    : missed ? `cold, missed the ${fmtTime(missed)} ping`
     : isCold(now) ? 'cold'
     : `ping ${fmtDuration(lastAt() + period() - now)}`
   const pings = pingsInWindow()
@@ -256,8 +269,10 @@ function keepwarmStatus(now: number): { text: string; stopped: boolean } | undef
 /** keepwarm for the pane, as values rather than one line */
 function keepwarmInfo(now: number) {
   const on = !!deadline && now < deadline
+  const missed = on ? missedAt(now) : undefined
   const next = !on ? undefined
     : !lastAt() || compacted ? 'after the next turn'
+    : missed ? `cold: missed the ${fmtTime(missed)} ping, after the next turn`
     : isCold(now) ? 'cold, after the next turn'
     : `in ${fmtDuration(lastAt() + period() - now)}`
   return {
@@ -279,14 +294,18 @@ async function keepwarmStart($: EngineInterface) {
   const now = Date.now()
   const saved = await $.store.get(keyOf(KEY_DEADLINE))
   const savedEvery = await $.store.get(keyOf(KEY_EVERY))
+  const savedStart = await $.store.get(keyOf(KEY_START))
   deadline = typeof saved === 'number' && saved > now ? saved : 0
-  // a restored window's start is not stored: assume the default length
-  windowStart = deadline ? Math.min(now, deadline - DEFAULT_WINDOW_MS) : 0
+  // a window saved before its start was stored: assume the default length
+  windowStart = !deadline ? 0 : typeof savedStart === 'number' && savedStart <= now ? savedStart : Math.min(now, deadline - DEFAULT_WINDOW_MS)
   if (!deadline) {
     await $.store.delete(keyOf(KEY_DEADLINE))
     await $.store.delete(keyOf(KEY_EVERY))
+    await $.store.delete(keyOf(KEY_START))
   }
   every = typeof savedEvery === 'number' && savedEvery >= MIN_PING_MS ? savedEvery : 0
+  const missed = missedAt(now)
+  if (missed) $.ui.log(`prompt-cache-control: keepwarm missed the ${fmtTime(missed)} ping (Claude Code was not running or the computer slept), so the cache went cold. The next message writes it again, then pinging resumes.`)
   always = (await $.store.get(KEY_ALWAYS)) === true
   if (always) await startWindow($, DEFAULT_WINDOW_MS, 0)
   await $.command.register({
@@ -326,6 +345,7 @@ async function stop($: EngineInterface, why: string | null, forgetAlways = false
   disarm()
   await $.store.delete(keyOf(KEY_DEADLINE))
   await $.store.delete(keyOf(KEY_EVERY))
+  await $.store.delete(keyOf(KEY_START))
   if (forgetAlways) {
     always = false
     await $.store.delete(KEY_ALWAYS)
@@ -353,8 +373,13 @@ async function ping($: EngineInterface) {
   if (!deadline) return
   const now = Date.now()
   if (now >= deadline || isCold(now)) return arm($)
-  // a turn in the meantime re-armed the timer; this callback is stale
-  if (now - lastAt() < period() - 1000) return
+  // early: a timer that fired ahead of time, or a clock that moved; re-arming once per request keeps keepwarm
+  // from going quiet without a timer loop
+  if (now - lastAt() < period() - 1000) {
+    if (rearmedFor === lastAt()) return
+    rearmedFor = lastAt()
+    return arm($)
+  }
   const model = samples[samples.length - 1]?.model ?? ''
   let reply
   try {
@@ -402,14 +427,17 @@ async function startWindow($: EngineInterface, windowMs: number, everyMs: number
   userOff = false
   stopped = null
   await $.store.set(keyOf(KEY_DEADLINE), deadline)
+  await $.store.set(keyOf(KEY_START), windowStart)
   await arm($)
 }
 
 function statusLine(now: number): string | undefined {
   if (stopped) return `keepwarm stopped: ${stopped}`
   if (!deadline || now >= deadline) return undefined
+  const missed = missedAt(now)
   const next = !lastAt() ? ' · waiting for the first turn'
     : compacted ? ' · waiting for the first turn after compaction'
+    : missed ? ` · cold now: the ${fmtTime(missed)} ping was missed (Claude Code was not running or the computer slept), first ping ${fmtDuration(period())} after the next turn`
     : isCold(now) ? ` · cold now, first ping ${fmtDuration(period())} after the next turn`
     : ` · ping in ${fmtDuration(lastAt() + period() - now)}`
   const last = lastPing ? ` · last ping read ${fmtTokens(lastPing.read)} ${fmtUsd(lastPing.usd)}` : ''

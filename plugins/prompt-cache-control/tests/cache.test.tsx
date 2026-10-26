@@ -270,6 +270,40 @@ describe('the band', () => {
     await ui.unmount()
   })
 
+  test('a restart names the ping the window missed while the process was down', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    on('clock.after', () => ({ value: { cancel: () => {} } }) as never)
+    const now = Date.now()
+    memStore(on, new Map<string, unknown>([
+      ['keepwarm.deadline:s1', now + 3 * 3600_000],
+      ['keepwarm.start:s1', now - 3 * 3600_000],
+      ['samples:s1', { at: now, samples: [{ turnId: 't1', index: 0, model: 'claude-sonnet-5-5', startedAt: now - 2 * 3600_000, read: 80_000, write: 100, fresh: 300, output: 5 }] }],
+    ]))
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    const ui = await band($)
+    expect(await ui.find({ type: 'Text', text: /cold, missed the \d\d:\d\d ping/ })).toBeDefined()
+    await ui.unmount()
+    expect(calls.logs.join('\n')).toMatch(/keepwarm missed the \d\d:\d\d ping/)
+  })
+
+  test('a window opened on an already cold cache missed no ping', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    on('clock.after', () => ({ value: { cancel: () => {} } }) as never)
+    const now = Date.now()
+    memStore(on, new Map<string, unknown>([
+      ['keepwarm.deadline:s1', now + 3 * 3600_000],
+      ['keepwarm.start:s1', now - 10 * 60_000],
+      ['samples:s1', { at: now, samples: [{ turnId: 't1', index: 0, model: 'claude-sonnet-5-5', startedAt: now - 2 * 3600_000, read: 80_000, write: 100, fresh: 300, output: 5 }] }],
+    ]))
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    const ui = await band($)
+    expect(await ui.find({ type: 'Text', text: /· cold$/ })).toBeDefined()
+    await ui.unmount()
+    expect(calls.logs.join('\n')).not.toContain('missed')
+  })
+
   test('the 5-hour window goes under the prompt, after the cache entry when that is on', { options: { status: true } }, async ($, on) => {
     const calls: Calls = { status: [], logs: [] }
     const resetsAt = new Date(Date.now() + 2 * 3600_000 + 13 * 60_000 + 30_000).toISOString()

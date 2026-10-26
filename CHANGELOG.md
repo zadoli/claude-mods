@@ -4,6 +4,10 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.8.1 — 2026-10-26
+- A keepwarm timer that fired early no longer stops the pings until the next turn: it re-arms once per request.
+- When the cache went cold inside a running keepwarm window without a ping (Claude Code was not running or the computer slept), the band and the pane name the missed ping (`cold, missed the 14:05 ping`), and a restart logs it once. The window's start is saved (`keepwarm.start:<sid>`), so a restart no longer assumes a 6-hour window.
+
 ### 0.8.0 — 2026-10-14
 - The cold-cache guard stops a message only at `compactAtTokens` (100k by default) or more, the size where the expired hint stops saying "just keep going", instead of a fixed 50k.
 - The pane and `/cache text` show Claude Code's idle compaction (`idle compact`), read at session start from its cached remote flag and the settings that turn it off. When it is on, a notice says keepwarm's 50m ping is wasted on conversations it compacts, since keepwarm pings do not reset its timer.
