@@ -50,6 +50,7 @@ import {
   byTurn,
   fmtClock,
   fmtCountdown,
+  fmtTimeOfDay,
   fmtLimit,
   fmtTokens,
   hitRatio,
@@ -857,20 +858,36 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (!showBand || e.props.hasSurvey || isPaneOpen) return next(e)
+    if (!showBand || isPaneOpen) return next(e)
     const { last, advice, left } = current(policy, Date.now())
     const { Box, Text, Button } = $.ui.resolve(e)
     const columns = e.viewport?.columns ?? 100
     const color = COLOR[advice.kind]
+    // a question card above the prompt: one short row, no button and no gap, so the card keeps the room
+    const compact = !!e.props.hasSurvey
     // other mods' rows above the prompt come back from next(e). Ours goes on top, with a gap before theirs,
     // so the order does not hang on which mod the engine loaded first (it differs by install source)
     const rest = await next(e)
     const band = (row: RenderChildren) => (
       <Box flexDirection="column">
         {row}
-        {rest ? <Box key="rest" flexDirection="column" marginTop={1}>{rest}</Box> : null}
+        {rest ? <Box key="rest" flexDirection="column" marginTop={compact ? 0 : 1}>{rest}</Box> : null}
       </Box>
     )
+
+    if (compact) {
+      const kw = last ? keepwarmStatus(Date.now()) : null
+      const counting = !!last && advice.kind !== 'uncached' && advice.kind !== 'off'
+      return band(
+        <Box key="cache" flexDirection="row" columnGap={1}>
+          <Text bold color={last ? color : undefined} dimColor={!last}>{!last ? '○' : advice.kind === 'warm' ? '●' : advice.kind === 'soon' ? '▲' : advice.kind === 'off' || advice.kind === 'cold' || advice.kind === 'uncached' ? '○' : '✖'}</Text>
+          <Text bold color="cyan">cache</Text>
+          {last ? <Text bold>{pct1(hitRatio(last))}</Text> : <Text dimColor>{advice.kind === 'off' ? advice.text : 'waiting'}</Text>}
+          {counting && <Text bold color={left > 0 ? lifeColor(left, ttl, policy.warnMs) : 'red'}>{`⏱ ${left > 0 ? fmtCountdown(left) : '0:00'}`}</Text>}
+          {kw && <Text color={kw.stopped ? 'red' : 'magenta'} wrap="truncate-end">{kw.text}</Text>}
+        </Box>,
+      )
+    }
 
     // no request yet (new session, /clear, a plugin reload): a placeholder row, so the band does not vanish
     if (!last) {
@@ -1038,6 +1055,7 @@ export const register: Register = (on, options) => {
         {section('turns', 'TURNS', [
           rows.length === 0 ? <Text key="none" dimColor>{sp('no requests yet')}</Text> : <Box key="head" flexDirection="row" columnGap={1}>
             {cell('h:turn', 4, 'turn', 'cyan', true)}
+            {cell('h:time', 5, 'time', 'cyan', true)}
             {cell('h:steps', 5, 'steps', 'cyan', true)}
             {cell('h:read', 6, 'read', 'green', true)}
             {cell('h:wrote', 6, 'wrote', 'yellow', true)}
@@ -1055,6 +1073,7 @@ export const register: Register = (on, options) => {
                 {r.turnId.startsWith('keepwarm-') ? cell(`c:turn:${r.turnId}`, 4, '♨')
                   : misses.some(m => m.turnId === r.turnId) ? cell(`c:turn:${r.turnId}`, 4, `❄${n}`, 'cyan', true)
                   : cell(`c:turn:${r.turnId}`, 4, String(n))}
+                {cell(`c:time:${r.turnId}`, 5, fmtTimeOfDay(r.startedAt))}
                 {cell(`c:steps:${r.turnId}`, 5, String(r.steps))}
                 {cell(`c:read:${r.turnId}`, 6, fmtTokens(r.read), 'green')}
                 {cell(`c:wrote:${r.turnId}`, 6, fmtTokens(r.write), 'yellow')}

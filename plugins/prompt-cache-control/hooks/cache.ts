@@ -197,6 +197,12 @@ export function fmtClock(ms: number): string {
 }
 
 /** the band's countdown: whole minutes (rounded down) from 10 minutes up, so it does not tick; m:ss below */
+/** a wall-clock time of day in local time, "14:05" */
+export function fmtTimeOfDay(at: number): string {
+  const d = new Date(at)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 export function fmtCountdown(ms: number): string {
   if (ms < 10 * 60_000) return fmtClock(ms)
   const total = Math.floor(ms / 60_000)
@@ -224,6 +230,8 @@ export function bar(ratio: number, width: number): string {
 
 export type TurnRow = {
   turnId: string
+  /** when the turn's first request started, ms since the epoch */
+  startedAt: number
   steps: number
   read: number
   write: number
@@ -237,7 +245,7 @@ export function byTurn(samples: readonly Sample[]): TurnRow[] {
   for (const s of samples) {
     let row = rows[rows.length - 1]
     if (!row || row.turnId !== s.turnId) {
-      row = { turnId: s.turnId, steps: 0, read: 0, write: 0, fresh: 0, output: 0 }
+      row = { turnId: s.turnId, startedAt: s.startedAt, steps: 0, read: 0, write: 0, fresh: 0, output: 0 }
       rows.push(row)
     }
     row.steps += 1

@@ -12,6 +12,7 @@ import {
   byTurn,
   fmtClock,
   fmtCountdown,
+  fmtTimeOfDay,
   fmtLimit,
   fmtTokens,
   hitRatio,
@@ -160,6 +161,18 @@ describe('per-turn rows', () => {
     expect(rows[0]).toEqual(expect.objectContaining({ turnId: 'a', steps: 2, read: 25, write: 5, fresh: 3 }))
     expect(rows[1].steps).toBe(1)
   })
+
+  test('a turn starts when its first request did', () => {
+    const rows = byTurn([
+      sample({ turnId: 'a', index: 0, startedAt: 1_000 }),
+      sample({ turnId: 'a', index: 1, startedAt: 5_000 }),
+    ])
+    expect(rows[0].startedAt).toBe(1_000)
+  })
+
+  test('time of day is local hours and minutes', () => {
+    expect(fmtTimeOfDay(new Date(2026, 9, 28, 9, 5, 59).getTime())).toBe('09:05')
+  })
 })
 
 // The module end to end: a main-loop request feeds the band, a subagent's does not.
@@ -238,6 +251,26 @@ describe('the band', () => {
     expect(await ui.find({ type: 'Text', text: /5m · warm/ })).toBeDefined()
     await ui.unmount()
     expect(calls.status.at(-1)).toMatch(/^cache 98\.4% · [45]:\d\d$/)
+  })
+
+  test('a question card above the prompt shrinks the band to one row without the button', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    const mount = () => $.ui.mount({ plugin: 'prompt-cache-control', surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: true } as never })
+
+    let ui = await mount()
+    expect(await ui.find({ type: 'Text', text: /waiting/ })).toBeDefined()
+    expect(await ui.find({ type: 'Button' })).toBeUndefined()
+    await ui.unmount()
+
+    await step($)
+    ui = await mount()
+    expect(await ui.find({ type: 'Text', text: /98\.4%/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /⏱ [45]:\d\d/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /read 80k|5m · warm/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Button' })).toBeUndefined()
+    await ui.unmount()
   })
 
   test('a restart under the same session keeps the last request, not "waiting for the first request"', async ($, on) => {

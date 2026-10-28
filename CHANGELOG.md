@@ -4,6 +4,9 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.9.0 — 2026-10-28
+- TURNS: a `time` column with the local time (`14:05`) each turn's first request started.
+
 ### 0.8.1 — 2026-10-26
 - A keepwarm timer that fired early no longer stops the pings until the next turn: it re-arms once per request.
 - When the cache went cold inside a running keepwarm window without a ping (Claude Code was not running or the computer slept), the band and the pane name the missed ping (`cold, missed the 14:05 ping`), and a restart logs it once. The window's start is saved (`keepwarm.start:<sid>`), so a restart no longer assumes a 6-hour window.
