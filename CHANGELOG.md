@@ -6,6 +6,7 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ### 0.9.0 — 2026-10-28
 - TURNS: a `time` column with the local time (`14:05`) each turn's first request started.
+- With a question card above the prompt the band no longer disappears: it shrinks to one row (`● cache 98.4% ⏱ 4:12`) without the details button.
 
 ### 0.8.1 — 2026-10-26
 - A keepwarm timer that fired early no longer stops the pings until the next turn: it re-arms once per request.
