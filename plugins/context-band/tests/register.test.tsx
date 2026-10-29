@@ -1,6 +1,6 @@
 // Run with: claude plugin test ~/.claude/skills/context-band
 import { describe, expect, test } from 'claude-code/testing'
-import { branchOf } from '../hooks/register.tsx'
+import { branchOf, DEFAULT_SHOW, parseShow } from '../hooks/register.tsx'
 
 const fakeFs = (files: Record<string, string>) => ({
   exists: async (p: string) => Object.keys(files).some(f => f === p || f.startsWith(`${p}/`)),
@@ -28,5 +28,20 @@ describe('branchOf', () => {
       'D:/repo/.git/worktrees/wt/HEAD': 'ref: refs/heads/wt-branch\n',
     })
     expect(await branchOf(fs, 'D:/wt')).toBe('wt-branch')
+  })
+})
+
+describe('parseShow', () => {
+  test('nothing stored gives everything on', () => {
+    expect(parseShow(undefined)).toEqual(DEFAULT_SHOW)
+  })
+
+  test('stored booleans win, anything else falls back to the default', () => {
+    expect(parseShow({ cwd: false, branch: 'no', noSkill: false, extra: true })).toEqual({
+      cwd: false,
+      branch: true,
+      skill: true,
+      noSkill: false,
+    })
   })
 })

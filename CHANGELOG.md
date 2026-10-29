@@ -46,6 +46,10 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## context-band
 
+### 0.3.0 — 2026-10-29
+- "⚡ no skill" (dim) when no skill has been loaded since your last message.
+- /context-band, or the band's ⚙, opens a pane that turns the directory, branch, skill and "no skill" parts on or off; the choice is kept across sessions.
+
 ### 0.2.0 — 2026-10-08
 - A blank row instead of a rule under the cache band.
 

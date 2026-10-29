@@ -5,12 +5,49 @@
  *   - the skill is the last Skill tool call since your last message; a skill run as a
  *     slash command does not go through that tool and is not shown
  *   - refreshed at session start, on each prompt, after each tool call and turn
+ *   - /context-band (or the band's ⚙) opens a pane that turns each part on or off;
+ *     the choice is kept across sessions
  */
 import type { EngineInterface, Register } from 'claude-code'
+
+const PANE = 'context-band'
+const COMMAND = 'context-band'
+const KEY_SHOW = 'show'
+
+/** what the band shows; each is a toggle in the pane */
+export type Show = { cwd: boolean; branch: boolean; skill: boolean; noSkill: boolean }
+export const DEFAULT_SHOW: Show = { cwd: true, branch: true, skill: true, noSkill: true }
+const LABELS: [keyof Show, string][] = [
+  ['cwd', '📁 working directory'],
+  ['branch', '⎇ git branch'],
+  ['skill', '⚡ skill loaded'],
+  ['noSkill', '⚡ "no skill" when none is loaded'],
+]
+
+/** a stored value read back over the defaults; anything not a boolean is dropped */
+export function parseShow(v: unknown): Show {
+  const out = { ...DEFAULT_SHOW }
+  if (v && typeof v === 'object') {
+    for (const [k] of LABELS) {
+      const b = (v as Record<string, unknown>)[k]
+      if (typeof b === 'boolean') out[k] = b
+    }
+  }
+  return out
+}
 
 let cwd = ''
 let branch: string | undefined
 let skill: string | undefined
+let show: Show = { ...DEFAULT_SHOW }
+
+async function toggle($: EngineInterface, k: keyof Show) {
+  show = { ...show, [k]: !show[k] }
+  $.ui.invalidate('ui.render')
+  await $.store.set(KEY_SHOW, show).catch(err => $.ui.log(`context-band: ${err}`, { to: 'debug' }))
+}
+
+const openPane = ($: EngineInterface) => $.ui.open({ id: PANE, title: 'context band', focus: true })
 
 const norm = (p: string) => {
   let s = p.split('\\').join('/')
@@ -66,8 +103,19 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
     skill = undefined
+    show = parseShow(await $.store.get(KEY_SHOW).catch(() => undefined))
+    await $.command.register({
+      name: COMMAND,
+      description: 'Choose what the context band shows above the prompt',
+      immediate: true,
+    })
     await refresh($)
     return r
+  })
+
+  on('command.run', { command: COMMAND }, async $ => {
+    await openPane($)
+    return { text: 'context band settings opened' }
   })
 
   on('prompt.submit', async ($, e, next) => {
@@ -99,15 +147,38 @@ export const register: Register = on => {
     const rest = await next(e)
     // the terminal's status line already shows these
     if (e.surface !== 'desktop' || e.props.hasSurvey || !cwd) return rest
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const skillPart = skill
+      ? show.skill ? <Text key="skill" color="yellow">{`⚡ ${skill}`}</Text> : null
+      : show.noSkill ? <Text key="skill" dimColor>⚡ no skill</Text> : null
     return (
       <Box flexDirection="column">
         {rest}
         {/* a gap under the rows above (the cache band), only when there are any */}
         <Box flexDirection="row" columnGap={2} marginTop={rest ? 1 : 0}>
-          <Text color="blue" wrap="truncate-start">{`📁 ${cwd}`}</Text>
-          {branch ? <Text color="green">{`⎇ ${branch}`}</Text> : null}
-          {skill ? <Text color="yellow">{`⚡ ${skill}`}</Text> : null}
+          {show.cwd ? <Text key="cwd" color="blue" wrap="truncate-start">{`📁 ${cwd}`}</Text> : null}
+          {show.branch && branch ? <Text key="branch" color="green">{`⎇ ${branch}`}</Text> : null}
+          {skillPart}
+          <Button key="settings" label="⚙" plain dimColor onPress={() => void openPane($)} />
+        </Box>
+      </Box>
+    )
+  })
+
+  on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    if (e.requestId !== PANE) return next(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column" rowGap={1}>
+        <Text dimColor>What the band above the prompt shows (desktop app):</Text>
+        {LABELS.map(([k, label]) => (
+          <Box key={`row:${k}`} flexDirection="row" columnGap={1}>
+            <Button key={k} label={show[k] ? 'on ' : 'off'} variant={show[k] ? 'primary' : 'secondary'} onPress={() => void toggle($, k)} />
+            <Text dimColor={!show[k]}>{label}</Text>
+          </Box>
+        ))}
+        <Box key="foot">
+          <Button key="close" label="close" role="dismiss" onPress={() => void $.ui.close({ id: PANE })} />
         </Box>
       </Box>
     )

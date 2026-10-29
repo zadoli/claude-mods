@@ -1,7 +1,7 @@
 {
   "name": "context-band",
-  "version": "0.2.0",
-  "description": "A row above the prompt with the working directory, its git branch and the skill loaded since your last message.",
+  "version": "0.3.0",
+  "description": "A row above the prompt with the working directory, its git branch and the skill loaded since your last message (or \"no skill\"); /context-band turns each part on or off.",
   "author": {
     "name": "Zádori Olivér",
     "url": "https://github.com/zadoli"
