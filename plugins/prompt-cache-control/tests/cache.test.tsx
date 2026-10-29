@@ -677,6 +677,25 @@ describe('settings toggles', () => {
     expect(nextGuard('off')).toBe('refuse')
   })
 
+  test('the band hides beside the /cache pane, but shows while the settings pane is open', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls)
+    on('session.surfaces', () => ({ value: ['terminal'] }) as never)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    await step($)
+    const shown = async () => {
+      const ui = await band($)
+      const hit = await ui.find({ type: 'Text', text: /98\.4%/ })
+      await ui.unmount()
+      return !!hit
+    }
+    expect(await shown()).toBe(true)
+    await $.command.run({ command: 'cache', args: '' } as never)
+    expect(await shown()).toBe(false)
+    await $.command.run({ command: 'cache', args: 'settings' } as never)
+    expect(await shown()).toBe(true)
+  })
+
   test('a stored choice applies at session start, over the options', async ($, on) => {
     const calls: Calls = { status: [], logs: [] }
     fakeEngine(on, {}, calls, undefined, [{ kind: 'five_hour', percentUsed: 42, resetsAt: new Date(Date.now() + 3600_000).toISOString() } as never])

@@ -100,6 +100,8 @@ let lastKey = ''
 let toastedFor = 0
 let toastLevel = Infinity
 let isPaneOpen = false
+/** the settings pane is open: the band shows even beside the /cache pane, so a toggle's effect is seen */
+let isSettingsOpen = false
 /** when the session began (its first launch if resumed, /clear restarts it); 0 until known */
 let sessionStartedAt = 0
 
@@ -128,7 +130,9 @@ const COLOR: Record<Advice['kind'], string | undefined> = {
 const pct1 = (ratio: number) => `${(ratio * 100).toFixed(1)}%`
 
 async function openSettings($: EngineInterface) {
+  isSettingsOpen = true
   await $.ui.open({ id: SETTINGS_PANE, title: 'cache settings', focus: true })
+  $.ui.invalidate('ui.render')
 }
 
 /** the settings pane's choice drawn at once and kept in the store (undefined: dropped) */
@@ -884,6 +888,11 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.close', async ($, e, next) => {
+    if (e.id === SETTINGS_PANE) {
+      isSettingsOpen = false
+      $.ui.invalidate('ui.render')
+      return next(e)
+    }
     if (e.id !== PANE) return next(e)
     isPaneOpen = false
     // the band hides while the pane is open: draw it again now, not at the next countdown tick
@@ -901,7 +910,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (!showBand || isPaneOpen) return next(e)
+    if (!showBand || (isPaneOpen && !isSettingsOpen)) return next(e)
     const { last, advice, left } = current(policy, Date.now())
     const { Box, Text, Button } = $.ui.resolve(e)
     const columns = e.viewport?.columns ?? 100
@@ -938,6 +947,7 @@ export const register: Register = (on, options) => {
         <Box key="cache" flexDirection="row" columnGap={1}>
           <Text dimColor wrap="truncate-end">{advice.kind === 'off' ? `cache: ${advice.text}` : '○ cache · waiting for the first request'}</Text>
           <Button key="open" label="details" onPress={() => openPane($)} />
+          <Button key="settings" label="⚙" plain dimColor onPress={() => openSettings($)} />
         </Box>,
       )
     }
@@ -967,6 +977,7 @@ export const register: Register = (on, options) => {
         {kw && <Text color={kw.stopped ? 'red' : 'magenta'}>{kw.text}</Text>}
         {cold && <Text color="cyan">{cold}</Text>}
         <Button key="open" label="details" onPress={() => openPane($)} />
+        <Button key="settings" label="⚙" plain dimColor onPress={() => openSettings($)} />
         <Text dimColor wrap="truncate-end">{`${ttl} · ${advice.text}`}</Text>
       </Box>,
     )

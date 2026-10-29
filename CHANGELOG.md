@@ -4,6 +4,10 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.11.0 — 2026-10-29
+- A ⚙ button in the band opens the settings pane.
+- While the settings pane is open the band stays above the prompt, even beside the `/cache` pane, so each toggle's effect shows at once.
+
 ### 0.10.0 — 2026-10-29
 - `/cache settings` (or the `settings` button in the `/cache` pane) opens a pane that turns the band, the token breakdown, the status entry, the 5-hour window, the toasts and auto-keepwarm on or off, and steps the cold-cache guard through refuse / warn / off. The choice is kept across sessions over the plugin's options; `reset to options` drops it.
 

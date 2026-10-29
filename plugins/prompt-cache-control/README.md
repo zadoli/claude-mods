@@ -59,7 +59,7 @@ Other switches read from the environment at session start:
 
 ## Options
 
-`/cache settings` (or the `settings` button in the `/cache` pane) opens a pane that turns `band`, `breakdown`, `status`, `limit`, `toast` and `autoKeepwarm` on or off and steps `guard` through refuse / warn / off. The choice is kept in the mod's store across sessions and wins over the options below; `reset to options` drops it.
+`/cache settings` (or the band's ⚙, or the `settings` button in the `/cache` pane) opens a pane that turns `band`, `breakdown`, `status`, `limit`, `toast` and `autoKeepwarm` on or off and steps `guard` through refuse / warn / off. The choice is kept in the mod's store across sessions and wins over the options below; `reset to options` drops it. While it is open the band stays above the prompt, even beside the `/cache` pane.
 
 ```
   ttl: string               "auto" | "5m" | "1h" (default auto)
