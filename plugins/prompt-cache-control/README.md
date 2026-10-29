@@ -7,9 +7,9 @@ down to the moment the cache lapses and tells you what to do about it: keep
 going, `/compact` or `/clear`.
 
 ```
-cache ██████████ 98% read 80k · wrote 1k · new 300 ⏱ 3:41 5m · warm, keep going
-cache ░░░░░░░░░░  0% read 0 · wrote 52k · new 300 ⏱ 4:58 5m · cache missed: model changed (…)
-cache ██████████ 98% read 150k · wrote 1k · new 300 ⏱ 0:00 5m · expired: the next message rewrites 151k tokens. /compact first, or /clear if the task is done
+cache ██████████ 98% read 80k · wrote 1k · new 300 ⏱ 3:41 warm, keep going
+cache ░░░░░░░░░░  0% read 0 · wrote 52k · new 300 ⏱ 4:58 cache missed: model changed (…)
+cache ██████████ 98% read 150k · wrote 1k · new 300 ⏱ 0:00 expired: the next message rewrites 151k tokens. /compact first, or /clear if the task is done
 ```
 
 `/cache` opens a pane: the time left with a solid bar that shrinks as the cache runs out (green, yellow below 40% of the lifetime, red from the warning threshold), a stacked read / wrote / new bar for the last request, and a colour-coded table with one row per turn. Bars are filled cells and columns have fixed widths with no-break spaces, so the terminal and the Desktop (HTML) pane render the same.
@@ -59,7 +59,7 @@ Other switches read from the environment at session start:
 
 ## Options
 
-`/cache settings` (or the band's ⚙, or the `settings` button in the `/cache` pane) opens a pane that turns `band`, `breakdown`, `status`, `limit`, `toast` and `autoKeepwarm` on or off and steps `guard` through refuse / warn / off. The choice is kept in the mod's store across sessions and wins over the options below; `reset to options` drops it. While it is open the band stays above the prompt, even beside the `/cache` pane.
+`/cache settings` (or the band's ⚙, or the `settings` button, a ⚙ on the desktop app, in the `/cache` pane) opens a pane that turns `band`, `breakdown`, `status`, `limit`, `toast` and `autoKeepwarm` on or off and steps `guard` through refuse / warn / off. The choice is kept in the mod's store across sessions and wins over the options below; `reset to options` drops it. While it is open the band stays above the prompt, even beside the `/cache` pane.
 
 ```
   ttl: string               "auto" | "5m" | "1h" (default auto)

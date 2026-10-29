@@ -4,6 +4,10 @@ Each plugin is versioned on its own (`plugins/<name>/.claude-plugin/plugin.json`
 
 ## prompt-cache-control
 
+### 0.12.0 — 2026-10-29
+- On the desktop app the band's `details` button is a 📊 icon and the `/cache` pane's `settings` button a ⚙; the terminal keeps the words.
+- The band's buttons sit at the end of the row, and the band no longer repeats the cache lifetime (`1h`); the `/cache` pane shows it.
+
 ### 0.11.0 — 2026-10-29
 - A ⚙ button in the band opens the settings pane.
 - While the settings pane is open the band stays above the prompt, even beside the `/cache` pane, so each toggle's effect shows at once.

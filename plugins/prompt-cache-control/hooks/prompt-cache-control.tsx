@@ -920,6 +920,14 @@ export const register: Register = (on, options) => {
     // other mods' rows above the prompt come back from next(e). Ours goes on top, with a gap before theirs,
     // so the order does not hang on which mod the engine loaded first (it differs by install source)
     const rest = await next(e)
+    // the desktop draws icons; the terminal keeps words, which read better in a grid of cells
+    const icons = e.surface === 'desktop'
+    const buttons = [
+      icons
+        ? <Button key="open" label="📊" plain dimColor onPress={() => openPane($)} />
+        : <Button key="open" label="details" onPress={() => openPane($)} />,
+      <Button key="settings" label="⚙" plain dimColor onPress={() => openSettings($)} />,
+    ]
     const band = (row: RenderChildren) => (
       <Box flexDirection="column">
         {row}
@@ -946,8 +954,7 @@ export const register: Register = (on, options) => {
       return band(
         <Box key="cache" flexDirection="row" columnGap={1}>
           <Text dimColor wrap="truncate-end">{advice.kind === 'off' ? `cache: ${advice.text}` : '○ cache · waiting for the first request'}</Text>
-          <Button key="open" label="details" onPress={() => openPane($)} />
-          <Button key="settings" label="⚙" plain dimColor onPress={() => openSettings($)} />
+          {buttons}
         </Box>,
       )
     }
@@ -976,9 +983,8 @@ export const register: Register = (on, options) => {
         )}
         {kw && <Text color={kw.stopped ? 'red' : 'magenta'}>{kw.text}</Text>}
         {cold && <Text color="cyan">{cold}</Text>}
-        <Button key="open" label="details" onPress={() => openPane($)} />
-        <Button key="settings" label="⚙" plain dimColor onPress={() => openSettings($)} />
-        <Text dimColor wrap="truncate-end">{`${ttl} · ${advice.text}`}</Text>
+        <Text dimColor wrap="truncate-end">{advice.text}</Text>
+        {buttons}
       </Box>,
     )
   })
@@ -1141,7 +1147,9 @@ export const register: Register = (on, options) => {
         ])}
 
         <Box key="foot" marginTop={1} flexDirection="row" columnGap={2}>
-          <Button key="settings" label="settings" onPress={() => {}} />
+          {e.surface === 'desktop'
+            ? <Button key="settings" label="⚙" plain dimColor onPress={() => {}} />
+            : <Button key="settings" label="settings" onPress={() => {}} />}
           <Button key="close" label="close" onPress={() => {}} />
         </Box>
       </Box>
