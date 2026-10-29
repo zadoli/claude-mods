@@ -66,10 +66,16 @@ import {
   remainingMs,
   rowRatio,
   segments,
+  togglesOf,
+  mergeToggles,
+  nextGuard,
 } from './cache.ts'
-import type { Account, Advice, CacheEnv, GuardMode, Sample, Ttl } from './cache.ts'
+import type { Account, Advice, CacheEnv, GuardMode, Sample, Toggles, Ttl } from './cache.ts'
 
 const PANE = 'cache'
+const SETTINGS_PANE = 'cache-settings'
+// what the settings pane chose, over the plugin's options
+const KEY_TOGGLES = 'toggles'
 // the pane's label column
 const LABEL_W = 13
 const COMMAND = 'cache'
@@ -120,6 +126,18 @@ const COLOR: Record<Advice['kind'], string | undefined> = {
 
 /** a hit rate with one decimal, e.g. 99.5% */
 const pct1 = (ratio: number) => `${(ratio * 100).toFixed(1)}%`
+
+async function openSettings($: EngineInterface) {
+  await $.ui.open({ id: SETTINGS_PANE, title: 'cache settings', focus: true })
+}
+
+/** the settings pane's choice drawn at once and kept in the store (undefined: dropped) */
+async function saveToggles($: EngineInterface, t: Toggles | undefined, status: string | undefined) {
+  $.ui.status(status)
+  $.ui.invalidate('ui.render')
+  await (t ? $.store.set(KEY_TOGGLES, t) : $.store.delete(KEY_TOGGLES))
+    .catch(err => $.ui.log(`prompt-cache-control: settings not saved: ${err}`, { to: 'debug' }))
+}
 
 async function openPane($: EngineInterface) {
   isPaneOpen = true
@@ -617,19 +635,39 @@ export const register: Register = (on, options) => {
     warnMs: positive(options.warnSeconds, 60) * 1000,
     compactAtTokens: positive(options.compactAtTokens, 100_000),
   }
-  const showBand = options.band !== false
-  const showBreakdown = options.breakdown !== false
-  const showStatus = options.status === true
-  const showLimit = options.limit !== false
-  const autoWarm = options.autoKeepwarm === true
+  const fromOptions = togglesOf(options)
+  let toggles: Toggles = fromOptions
+  let showBand = true
+  let showBreakdown = true
+  let showStatus = false
+  let showLimit = true
+  let autoWarm = false
+  let wantToast = true
+  let guard: GuardMode = 'refuse'
+  const applyToggles = (t: Toggles) => {
+    toggles = t
+    showBand = t.band
+    showBreakdown = t.breakdown
+    showStatus = t.status
+    showLimit = t.limit
+    autoWarm = t.autoKeepwarm
+    wantToast = t.toast
+    guard = t.guard
+  }
+  applyToggles(fromOptions)
   /** the entry under the prompt: the cache's short line and/or the 5-hour window */
   const statusText = (now: number) =>
     [showStatus ? shortLine(policy, now) : undefined, showLimit ? fmtLimit(fiveHour, now) : undefined].filter(Boolean).join(' · ') || undefined
-  const wantToast = options.toast !== false
-  const guard: GuardMode = options.guard === 'warn' || options.guard === 'off' ? options.guard : 'refuse'
+  /** a choice from the settings pane (undefined: back to the options); answers the entry under the prompt */
+  const choose = (t: Toggles | undefined) => {
+    applyToggles(t ?? fromOptions)
+    lastKey = ''
+    return statusText(Date.now())
+  }
 
   on('session.start', async ($, e, next) => {
     const r = await next(e)
+    applyToggles(mergeToggles(fromOptions, await $.store.get(KEY_TOGGLES).catch(() => undefined)))
     samples = []
     lastKey = ''
     toastedFor = 0
@@ -662,8 +700,8 @@ export const register: Register = (on, options) => {
     await $.command
       .register({
         name: COMMAND,
-        description: 'Prompt-cache usage per turn and the time left before it lapses (stop closes)',
-        argumentHint: '[stop]',
+        description: 'Prompt-cache usage per turn and the time left before it lapses (settings: what it shows; stop closes)',
+        argumentHint: '[settings | stop]',
         immediate: true,
       })
       .catch(err => $.ui.log(`prompt-cache-control: /${COMMAND} not registered: ${err}`))
@@ -826,6 +864,10 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: COMMAND }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
+    if (arg === 'settings') {
+      await openSettings($)
+      return { text: 'cache settings opened' }
+    }
     if (arg === 'stop') {
       await $.ui.close({ id: PANE }).catch(() => undefined)
       isPaneOpen = false
@@ -852,6 +894,7 @@ export const register: Register = (on, options) => {
   on('ui.press', async ($, e, next) => {
     if (e.plugin !== $.plugin.name || e.requestId !== PANE) return next(e)
     if (e.element === 'close') await $.ui.close({ id: PANE }).catch(() => undefined)
+    if (e.element === 'settings') await openSettings($)
     if (e.element === 'kw-start') await startWindow($, DEFAULT_WINDOW_MS, 0)
     if (e.element === 'kw-stop') await stop($, null, true)
     return next(e)
@@ -1086,8 +1129,53 @@ export const register: Register = (on, options) => {
           }),
         ])}
 
-        <Box key="foot" marginTop={1}>
+        <Box key="foot" marginTop={1} flexDirection="row" columnGap={2}>
+          <Button key="settings" label="settings" onPress={() => {}} />
           <Button key="close" label="close" onPress={() => {}} />
+        </Box>
+      </Box>
+    )
+  })
+
+  // /cache settings: each part on or off, kept in the store over the plugin's options
+  on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    if (e.requestId !== SETTINGS_PANE) return next(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const flags: [Exclude<keyof Toggles, 'guard'>, string][] = [
+      ['band', 'band above the prompt'],
+      ['breakdown', 'read / wrote / new tokens in the band'],
+      ['status', 'hit rate and countdown under the prompt'],
+      ['limit', '5-hour window under the prompt'],
+      ['toast', 'toasts as the cache lapses'],
+      ['autoKeepwarm', 'start keepwarm with each message'],
+    ]
+    const changed = JSON.stringify(toggles) !== JSON.stringify(fromOptions)
+    return (
+      <Box flexDirection="column" rowGap={1}>
+        <Text dimColor>What prompt-cache-control shows and does; kept across sessions.</Text>
+        {flags.map(([k, label]) => (
+          <Box key={`row:${k}`} flexDirection="row" columnGap={1}>
+            <Button key={k} label={toggles[k] ? 'on ' : 'off'} variant={toggles[k] ? 'primary' : 'secondary'}
+              onPress={() => {
+                const t = { ...toggles, [k]: !toggles[k] }
+                void saveToggles($, t, choose(t))
+              }} />
+            <Text dimColor={!toggles[k]}>{label}</Text>
+          </Box>
+        ))}
+        <Box key="row:guard" flexDirection="row" columnGap={1}>
+          <Button key="guard" label={toggles.guard} variant={toggles.guard === 'off' ? 'secondary' : 'primary'}
+            onPress={() => {
+              const t = { ...toggles, guard: nextGuard(toggles.guard) }
+              void saveToggles($, t, choose(t))
+            }} />
+          <Text dimColor={toggles.guard === 'off'}>
+            {`cold-cache guard (${toggles.guard === 'refuse' ? 'refuses the first send' : toggles.guard === 'warn' ? 'sends, logs the price' : 'does nothing'})`}
+          </Text>
+        </Box>
+        <Box key="foot" flexDirection="row" columnGap={2}>
+          {changed ? <Button key="reset" label="reset to options" onPress={() => void saveToggles($, undefined, choose(undefined))} /> : null}
+          <Button key="close-settings" label="close" role="dismiss" onPress={() => void $.ui.close({ id: SETTINGS_PANE })} />
         </Box>
       </Box>
     )

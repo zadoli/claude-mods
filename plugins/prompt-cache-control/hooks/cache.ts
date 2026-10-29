@@ -343,6 +343,39 @@ export function observeTtl(prev: Sample | undefined, cur: Sample, known: Ttl | u
 
 export type GuardMode = 'refuse' | 'warn' | 'off'
 
+/** what the settings pane turns on or off; the plugin's options give the defaults */
+export type Toggles = { band: boolean; breakdown: boolean; status: boolean; limit: boolean; toast: boolean; autoKeepwarm: boolean; guard: GuardMode }
+export const TOGGLE_KEYS = ['band', 'breakdown', 'status', 'limit', 'toast', 'autoKeepwarm', 'guard'] as const
+
+/** the toggles from the plugin's options, as each option's own default reads them */
+export function togglesOf(o: Record<string, unknown>): Toggles {
+  return {
+    band: o.band !== false,
+    breakdown: o.breakdown !== false,
+    status: o.status === true,
+    limit: o.limit !== false,
+    toast: o.toast !== false,
+    autoKeepwarm: o.autoKeepwarm === true,
+    guard: o.guard === 'warn' || o.guard === 'off' ? o.guard : 'refuse',
+  }
+}
+
+/** what the pane stored over the options' toggles; a value of the wrong kind is dropped */
+export function mergeToggles(base: Toggles, stored: unknown): Toggles {
+  const out = { ...base }
+  if (!stored || typeof stored !== 'object') return out
+  const v = stored as Record<string, unknown>
+  for (const k of TOGGLE_KEYS) {
+    if (k === 'guard') {
+      if (v.guard === 'refuse' || v.guard === 'warn' || v.guard === 'off') out.guard = v.guard
+    } else if (typeof v[k] === 'boolean') out[k] = v[k] as boolean
+  }
+  return out
+}
+
+/** the next guard mode, as the pane's button steps through them */
+export const nextGuard = (g: GuardMode): GuardMode => (g === 'refuse' ? 'warn' : g === 'warn' ? 'off' : 'refuse')
+
 /**
  * What to do with a message (cold-cache guard, from cache-tax): `coldAt` is when
  * the last request's cache lapsed (undefined while warm), `minTokens` the prompt size below which a

@@ -25,6 +25,9 @@ import {
   guardVerdict,
   idleCompactState,
   isColdWrite,
+  togglesOf,
+  mergeToggles,
+  nextGuard,
 } from '../hooks/cache.ts'
 import type { Policy, Sample } from '../hooks/cache.ts'
 import type { Engine } from 'claude-code/testing'
@@ -652,5 +655,34 @@ describe('plan window estimate (experimental)', () => {
       T0,
     )
     expect(r).toEqual({ usd: 3.5, active: 1, stale: ['spend:c', 'spend:d'] })
+  })
+})
+
+describe('settings toggles', () => {
+  test('the options give the defaults, as each option reads them', () => {
+    expect(togglesOf({})).toEqual({ band: true, breakdown: true, status: false, limit: true, toast: true, autoKeepwarm: false, guard: 'refuse' })
+    expect(togglesOf({ band: false, status: true, guard: 'warn' })).toMatchObject({ band: false, status: true, guard: 'warn' })
+  })
+
+  test('stored choices win over the options; a value of the wrong kind is dropped', () => {
+    const base = togglesOf({})
+    expect(mergeToggles(base, undefined)).toEqual(base)
+    expect(mergeToggles(base, { band: false, limit: 'no', guard: 'off', extra: 1 })).toEqual({ ...base, band: false, guard: 'off' })
+    expect(mergeToggles(base, { guard: 'loud' }).guard).toBe('refuse')
+  })
+
+  test('the guard button steps refuse, warn, off and round', () => {
+    expect(nextGuard('refuse')).toBe('warn')
+    expect(nextGuard('warn')).toBe('off')
+    expect(nextGuard('off')).toBe('refuse')
+  })
+
+  test('a stored choice applies at session start, over the options', async ($, on) => {
+    const calls: Calls = { status: [], logs: [] }
+    fakeEngine(on, {}, calls, undefined, [{ kind: 'five_hour', percentUsed: 42, resetsAt: new Date(Date.now() + 3600_000).toISOString() } as never])
+    memStore(on, new Map<string, unknown>([['toggles', { ...togglesOf({}), limit: false }]]))
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+    await step($)
+    expect(calls.status.filter(Boolean)).toEqual([])
   })
 })
